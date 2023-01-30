@@ -58,11 +58,8 @@ class RL_AC(CACTO):
                 critic_loss = tf.math.reduce_mean(tf.math.square(y - critic_value))     # Critic loss function (tf.math.reduce_mean computes the mean of elements across dimensions of a tensor, in this case across the batch)
             else:
                 critic_loss = tf.math.reduce_mean(tf.math.square(tf.math.multiply(weights_batch,(y - critic_value))))       
-
         # Compute the gradients of the critic loss w.r.t. critic's parameters
-        
         critic_grad = tape.gradient(critic_loss, CACTO.critic_model.trainable_variables)    
-
         # Update the critic backpropagating the gradients
         CACTO.critic_optimizer.apply_gradients(zip(critic_grad, CACTO.critic_model.trainable_variables))
 
@@ -72,15 +69,12 @@ class RL_AC(CACTO):
                 actions = CACTO.actor_model(red_state_batch_norm, training=True)
             else:
                 actions = CACTO.actor_model(red_state_batch, training=True)
-
             # Both take into account normalization, ds_next_da is the gradient of the dynamics w.r.t. policy actions (ds'_da)
             next_state_tf, ds_next_da = self.env.simulate_and_derivative_tf(red_state_batch,actions.numpy(),self.batch_size)
-
             with tf.GradientTape() as tape:
                 tape.watch(next_state_tf)
                 critic_value_next = CACTO.critic_model(next_state_tf, training=True)                                 # next_state_batch = next state after applying policy's action, already normalized if self.NORMALIZE_INPUTS=1
-            dV_ds_next = tape.gradient(critic_value_next, next_state_tf)                                       # dV_ds' = gradient of V w.r.t. s', where s'=f(s,a) a=policy(s)   
-
+            dV_ds_next = tape.gradient(critic_value_next, next_state_tf)                                             # dV_ds' = gradient of V w.r.t. s', where s'=f(s,a) a=policy(s)   
             with tf.GradientTape() as tape1:
                 with tf.GradientTape() as tape2:
                         tape1.watch(actions)
@@ -88,12 +82,10 @@ class RL_AC(CACTO):
                         rewards_tf = self.env.reward_tf(next_state_tf, actions, self.batch_size, d_batch)
             dr_da = tape1.gradient(rewards_tf,actions)                                                          # dr_da = gradient of reward r w.r.t. policy's action a
             dr_ds_next = tape2.gradient(rewards_tf,next_state_tf)                                               # dr_ds' = gradient of reward r w.r.t. next state s' after performing policy's action a
-
-            dr_ds_next_dV_ds_next_reshaped = tf.reshape(dr_ds_next+dV_ds_next,(self.batch_size,1,self.nb_state))   # dr_ds' + dV_ds'
+            dr_ds_next_dV_ds_next_reshaped = tf.reshape(dr_ds_next+dV_ds_next,(self.batch_size,1,self.nb_state))# dr_ds' + dV_ds'
             dr_ds_next_dV_ds_next = tf.matmul(dr_ds_next_dV_ds_next_reshaped,ds_next_da)                        # (dr_ds' + dV_ds')*ds'_da
             dr_da_reshaped = tf.reshape(dr_da,(self.batch_size,1,self.nb_action))                               
             tf_sum = dr_ds_next_dV_ds_next + dr_da_reshaped                                                     # (dr_ds' + dV_ds')*ds'_da + dr_da
-
             # Now let's multiply -[(dr_ds' + dV_ds')*ds'_da + dr_da] by the actions a 
             # and then let's autodifferentiate w.r.t theta_A (actor NN's parameters) to finally get -dQ/dtheta_A 
             with tf.GradientTape() as tape:
@@ -107,10 +99,8 @@ class RL_AC(CACTO):
                 Q_neg = tf.matmul(-tf_sum_reshaped,actions_reshaped) 
                 
                 mean_Qneg = tf.math.reduce_mean(Q_neg)                                                           # Also here we need a scalar so we compute the mean -Q across the batch
-
             # Gradients of the actor loss w.r.t. actor's parameters
             actor_grad = tape.gradient(mean_Qneg, CACTO.actor_model.trainable_variables) 
-
             # Update the actor backpropagating the gradients
             CACTO.actor_optimizer.apply_gradients(zip(actor_grad, CACTO.actor_model.trainable_variables))
 
@@ -178,7 +168,7 @@ class RL_AC(CACTO):
         # Update NNs
         self.update(episode, state_batch_norm, state_batch, state_batch_norm, state_batch, reward_batch, next_state_batch, next_state_batch_norm, d_batch, weights_batch=weights_batch)
 
-    def RL_Manipulator_Solve(self, prev_state, ep, rand_time, env, tau0_TO, tau1_TO, tau2_TO, prioritized_buffer):
+    def RL_Manipulator_Solve(self, prev_state, ep, rand_time, env, tau_TO, prioritized_buffer):
         DONE = 0                              # Flag indicating if the episode has terminated
         ep_return = 0                         # Initialize the return
         step_counter = 0                      # Initialize the counter of episode steps
@@ -187,24 +177,17 @@ class RL_AC(CACTO):
         # START RL EPISODE
         while True:
             # Get current and next TO actions
-            action, next_TO_action = self.get_TO_actions(step_counter, action0_TO=tau0_TO, action1_TO=tau1_TO, action2_TO=tau2_TO)              
+            action, next_TO_action = self.get_TO_actions(step_counter, action_TO=tau_TO)           
 
             # Simulate actions and retrieve next state and compute reward
             next_state, rwrd = env.step(rand_time, prev_state, action)
             
             # Store performed action and next state and reward
-            CACTO.tau0_arr.append(action[0])
-            CACTO.tau1_arr.append(action[1])
-            CACTO.tau2_arr.append(action[2])
-            CACTO.q0_arr.append(next_state[0])
-            CACTO.q1_arr.append(next_state[1])
-            CACTO.q2_arr.append(next_state[2])
-            CACTO.v0_arr.append(next_state[3])
-            CACTO.v1_arr.append(next_state[4])
-            CACTO.v2_arr.append(next_state[5])
-            CACTO.t_arr.append(next_state[-1])
-            CACTO.x_ee_arr.append(conf.x_base + conf.l*(math.cos(CACTO.q0_arr[-1]) + math.cos(CACTO.q0_arr[-1]+CACTO.q1_arr[-1]) + math.cos(CACTO.q0_arr[-1]+CACTO.q1_arr[-1]+CACTO.q2_arr[-1])))
-            CACTO.y_ee_arr.append(conf.y_base + conf.l*(math.sin(CACTO.q0_arr[-1]) + math.sin(CACTO.q0_arr[-1]+CACTO.q1_arr[-1]) + math.sin(CACTO.q0_arr[-1]+CACTO.q1_arr[-1]+CACTO.q2_arr[-1])))
+            CACTO.control_arr = np.vstack([CACTO.control_arr, action.reshape(1,self.nb_action)])
+            CACTO.state_arr = np.vstack([CACTO.state_arr, next_state.reshape(1,self.nb_state)])
+            
+            CACTO.x_ee_arr.append(conf.x_base + conf.l*(math.cos(CACTO.state_arr[-1,0]) + math.cos(CACTO.state_arr[-1,0]+CACTO.state_arr[-1,1]) + math.cos(CACTO.state_arr[-1,0]+CACTO.state_arr[-1,1]+CACTO.state_arr[-1,2])))
+            CACTO.y_ee_arr.append(conf.y_base + conf.l*(math.sin(CACTO.state_arr[-1,0]) + math.sin(CACTO.state_arr[-1,0]+CACTO.state_arr[-1,1]) + math.sin(CACTO.state_arr[-1,0]+CACTO.state_arr[-1,1]+CACTO.state_arr[-1,2])))
             
             ep_arr.append(rwrd)
 
@@ -236,17 +219,17 @@ class RL_AC(CACTO):
                     V_final = 0.0
                 else:
                     if self.NORMALIZE_INPUTS:
-                        next_state_rollout = np.array([CACTO.q0_arr[final_i],CACTO.q1_arr[final_i],CACTO.q2_arr[final_i],CACTO.v0_arr[final_i],CACTO.v1_arr[final_i],CACTO.v2_arr[final_i],CACTO.t_arr[final_i]]) / self.state_norm_arr
+                        next_state_rollout = CACTO.state_arr[final_i,:] / self.state_norm_arr
                         next_state_rollout[-1] = 2*next_state_rollout[-1] - 1
                     else:
-                        next_state_rollout = np.array([CACTO.q0_arr[final_i],CACTO.q1_arr[final_i],CACTO.q2_arr[final_i],CACTO.v0_arr[final_i],CACTO.v1_arr[final_i],CACTO.v2_arr[final_i],CACTO.t_arr[final_i]]) / self.state_norm_arr
+                        next_state_rollout = CACTO.state_arr[final_i,:] / self.state_norm_arr
                     tf_next_state_rollout = tf.expand_dims(tf.convert_to_tensor(next_state_rollout), 0)
                     V_final = CACTO.target_critic(tf_next_state_rollout, training=False).numpy()[0][0]
                 cost_to_go = sum(ep_arr[i:final_i+1]) + V_final
                 cost_to_go_arr.append(np.float32(cost_to_go))
                 if i == len(ep_arr)-1:
                     DONE = 1 
-                prioritized_buffer.add(np.array([CACTO.q0_arr[i],CACTO.q1_arr[i],CACTO.q2_arr[i],CACTO.v0_arr[i],CACTO.v1_arr[i],CACTO.v2_arr[i],CACTO.t_arr[i]]), next_TO_action, action, cost_to_go_arr[i], np.array([0.0,0.0,0.0,0.0,0.0,0.0,0.0]), float(DONE))
+                prioritized_buffer.add(CACTO.state_arr[i,:], next_TO_action, action, cost_to_go_arr[i], np.zeros(self.nb_state), float(DONE)) 
         
         # Update the NNs
         for i in range(self.UPDATE_LOOPS):
@@ -256,13 +239,13 @@ class RL_AC(CACTO):
         return self.update_step_counter, ep_return
 
     # Get optimal actions at timestep "step" in the current episode
-    def get_TO_actions(self,step, action0_TO=None, action1_TO=None, action2_TO=None):
+    def get_TO_actions(self, step, action_TO=None):
 
-        actions = np.array([action0_TO[step], action1_TO[step], action2_TO[step]])
+        actions = action_TO[step,:]
  
         # Buond actions in case they are not already bounded in the TO problem
         if step < CACTO.NSTEPS_SH:
-            next_actions = np.array([np.clip(action0_TO[step+1], self.tau_lower_bound, self.tau_upper_bound), np.clip(action1_TO[step+1], self.tau_lower_bound, self.tau_upper_bound), np.clip(action2_TO[step+1], self.tau_lower_bound, self.tau_upper_bound)])
+            next_actions = np.clip(action_TO[step+1,:], self.tau_lower_bound, self.tau_upper_bound)
         else:
             next_actions = np.copy(actions) # Actions at last step of the episode are not performed 
 

@@ -3,21 +3,14 @@ import tensorflow as tf
 from tensorflow.keras import layers, regularizers
 from pyomo.environ import *
 from pyomo.dae import *
+import numpy as np
 
 class CACTO():
-
     # Initialize variables used both in TO and RL
+
     NSTEPS_SH = None
-    tau0_arr = [] 
-    tau1_arr = []
-    tau2_arr = []
-    q0_arr = []
-    q1_arr = []
-    q2_arr = []
-    v0_arr = []
-    v1_arr = []
-    v2_arr = []
-    t_arr = []
+    control_arr = np.empty((0, 3))
+    state_arr = np.empty((0, 7)) 
     x_ee_arr = []
     y_ee_arr = []
     
@@ -38,6 +31,7 @@ class CACTO():
                  values_schedule_LR_C, boundaries_schedule_LR_A, values_schedule_LR_A, 
                  CRITIC_LEARNING_RATE, ACTOR_LEARNING_RATE,nb_state, nb_action, robot,
                  recover_stopped_training, NNs_path, batch_size,init_setup_model=True):
+
         self.batch_size = batch_size
         self.env = env
  
@@ -115,7 +109,8 @@ class CACTO():
         model = tf.keras.Model([state_input], outputs)
 
         return model    
-
+    
+    # Setup RL model #
     def setup_model(self):
         # Create actor, critic and target NNs
         CACTO.actor_model = self.get_actor()
@@ -133,7 +128,7 @@ class CACTO():
             CACTO.critic_optimizer   = tf.keras.optimizers.Adam(CACTO.CRITIC_LEARNING_RATE)
             CACTO.actor_optimizer    = tf.keras.optimizers.Adam(CACTO.ACTOR_LEARNING_RATE)
 
-        # Set initial weights of the NNs and initialize the counter of the updates
+        # Set initial weights of the NNs
         if self.recover_stopped_training: 
             CACTO.actor_model.load_weights(self.NNs_path+"/Manipulator_{}.h5".format(self.update_step_counter))
             CACTO.critic_model.load_weights(self.NNs_path+"/Manipulator_critic{}.h5".format(self.update_step_counter))

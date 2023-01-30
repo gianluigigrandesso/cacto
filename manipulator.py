@@ -6,6 +6,7 @@ import tensorflow as tf
 import pinocchio as pin
 import manipulator_conf as conf #only for system parameters (M, l, Iz, ...)
 from gym.utils import seeding
+import random
 
 class Manipulator(gym.Env):
     metadata = {
@@ -44,6 +45,18 @@ class Manipulator(gym.Env):
         self.simulation_type = 'euler'      
         self.tau_coulomb_max = 0*np.ones(3)          # Expressed as percentage of torque max
 
+    def reset(self, seed=None, options=None):
+
+        # Choose the agent's location uniformly at random
+        self._state = np.zeros(self.nb_state)        
+        rand_time = self.np_random.uniform(self.x_init_min[-1], self.x_init_max[-1]) 
+        for i in range(self.nb_state-1): 
+            self._state[i] = self.np_random.uniform(self.x_init_min[i], self.x_init_max[i]) 
+        self._state[-1] = self.dt*round(rand_time/self.dt)
+
+        observation = self._state
+
+        return rand_time, observation
 
     def step(self, rand_time, state, u):
 
@@ -261,3 +274,7 @@ class Manipulator(gym.Env):
         Fu = tf.convert_to_tensor(Fu,dtype=tf.float32)    
 
         return tf.cast(tf.stack([q0_next,q1_next,q2_next,v0_next,v1_next,v2_next,t_next],1),dtype=tf.float32), Fu
+
+    def seed(self, seed=None):
+        self.np_random, seed = seeding.np_random(seed)
+        return [seed]

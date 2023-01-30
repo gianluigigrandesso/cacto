@@ -156,7 +156,7 @@ y_base = 0.0                            # y coord base
 x_min = np.array([-np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, 0])                  #not used
 x_init_min = np.array([-math.pi, -math.pi, -math.pi, -math.pi/4, -math.pi/4, -math.pi/4, 0]) #not used
 x_max = np.array([ np.inf,  np.inf,  np.inf,  np.inf,  np.inf,  np.inf, np.inf])             #not used
-x_init_max = np.array([ math.pi,  math.pi,  math.pi,  math.pi/4,  math.pi/4,  math.pi/4, np.inf]) #not used
+x_init_max = np.array([ math.pi,  math.pi,  math.pi,  math.pi/4,  math.pi/4,  math.pi/4, (NSTEPS-1)*dt]) #not used
 nb_state = robot.nq + robot.nv + 1
 state_norm_arr = np.array([15,15,15,10,10,10,int(NSTEPS*dt)])  # Array used to normalize states
 

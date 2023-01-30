@@ -15,11 +15,15 @@ import time
 
 time_start = time.time()
 
-### Select system and TO method ###
+### Select system and TO method - input main? ###
 system = 'manipulator'
 TO_method = 'pyomo'
 seed = 123
-##################################
+
+### TO DO #########
+system_param = None
+###################
+#################################################
 
 
 if system == 'manipulator':
@@ -76,13 +80,9 @@ f.close()
 tf.random.set_seed(seed)  
 random.seed(seed)
 
-### TO DO ###
-system_param = None
-###############
-
 # Create environment 
 env = Manipulator(conf.dt, conf.x_init_min, conf.x_init_max, conf.x_min, conf.x_max, conf.u_min, conf.u_max, conf.TARGET_STATE, conf.soft_max_param, conf.obs_param, conf.weight, conf.robot, conf.nb_state, conf.nb_action, conf.NORMALIZE_INPUTS, conf.state_norm_arr, conf.simu) 
-#env.seed(seed=seed)
+env.seed(seed=seed)
 
 # Create CACTO instance
 cacto_instance = CACTO(env, conf.NORMALIZE_INPUTS, conf.EPISODE_CRITIC_PRETRAINING, conf.tau_upper_bound, 
@@ -132,7 +132,7 @@ RLAC = RL_AC(env, conf.NORMALIZE_INPUTS, conf.EPISODE_CRITIC_PRETRAINING, conf.t
                 conf.values_schedule_LR_A, conf.CRITIC_LEARNING_RATE, conf.ACTOR_LEARNING_RATE, conf.nb_state, 
                 conf.nb_action, conf.robot, conf.recover_stopped_training, conf.NNs_path, conf.BATCH_SIZE)
 
-# Set initial weights of the NNs and initialize the counter of the updates
+# Initialize the counter of the updates
 if conf.recover_stopped_training:
     nb_starting_episode = ((conf.update_step_counter/conf.UPDATE_LOOPS)*conf.EP_UPDATE)+1
 else: 
@@ -147,16 +147,18 @@ avg_reward_list = []
 
 ### START TRAINING ###
 for ep in range(nb_starting_episode,conf.NEPISODES): 
+    
+    # TO #
+    rand_time, prev_state, tau_TO = TrOp.TO_Manipulator_Solve(ep, env)
+    
+    # RL # 
+    update_step_counter, ep_return = RLAC.RL_Manipulator_Solve(prev_state, ep, rand_time, env, tau_TO, prioritized_buffer)
 
-    rand_time, prev_state, tau0_TO, tau1_TO, tau2_TO = TrOp.TO_Manipulator_Solve(ep, env) # TO # 
-
-    update_step_counter, ep_return = RLAC.RL_Manipulator_Solve(prev_state, ep, rand_time, env, tau0_TO, tau1_TO, tau2_TO, prioritized_buffer) # RL # 
-
-    # Plot rollouts every 0.5% of the training (saved in a separate folder)
+    # Plot rollouts every conf.log_rollout_interval-training episodes (saved in a separate folder)
     if ep >= conf.ep_no_update and ep%conf.log_rollout_interval==0:
         _, _, _, _, _ = rollout(update_step_counter, CACTO.actor_model, env, rand_time, conf.N_try, diff_loc=1)     
 
-    # Plot rollouts and save the NNs every 5% of the training
+    # Plot rollouts and save the NNs every conf.log_rollout_interval-training episodes
     if ep >= conf.ep_no_update and conf.log_interval!=1 and conf.log_interval!=0 and ep%conf.log_interval==0: 
         _, _, _, _, _ = rollout(update_step_counter, CACTO.actor_model, env, rand_time, conf.N_try)        
         CACTO.actor_model.save_weights(conf.NNs_path+"/Manipulator_{}.h5".format(update_step_counter))
@@ -183,11 +185,3 @@ CACTO.target_critic.save_weights(conf.NNs_path+"/Manipulator_target_critic_final
 
 # Simulate the final policy
 tau0_all_final_sim, tau1_all_final_sim, tau2_all_final_sim, x_ee_all_final_sim, y_ee_all_final_sim = rollout(update_step_counter)
-
-
-'''
-actor_model.weigths diversi dal secondo update loop del primo episodio
-critic_model.weights diversi dal primo update del secondo episodio
-update function's input diversi dal primo update del secondo episodio
-mean_Qneg diversi dal secondo update loop del primo episodio
-'''

@@ -1,6 +1,6 @@
 import os
 import math
-import gepetto.corbaserver
+#import gepetto.corbaserver
 import time
 import subprocess
 import pinocchio as pin
