@@ -6,3 +6,4 @@
 - ***config_manipulator3DoF_pyomo*** configures the training for both *CACTO_3DoFManipulator* and *CACTO_3DoFManipulator*.
 - ***inits*** contains the functions to warm-start TO (ICS, CACTO's rollout, 0s). 
 - ***replay_buffer*** implements a reply buffer where to store and sample transitions. It implements also a prioritized version of the replay buffer using a segment tree structure implemented in ***segment_tree***  to efficiently calculate the cumulative probability needed to sample.
+
