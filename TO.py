@@ -7,7 +7,6 @@ from inits import init_tau0,init_tau1,init_tau2,init_q0,init_q1,init_q2,init_v0,
 from CACTO import CACTO
 import numpy as np
 import random
-#import manipulator_conf as conf #only for system parameters (M, l, Iz, ...)
 import math
 
        

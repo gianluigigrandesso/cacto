@@ -6,14 +6,14 @@ from tensorflow.keras import layers, regularizers
 from pyomo.environ import *
 from pyomo.dae import *
 from replay_buffer import PrioritizedReplayBuffer
-from Plot_functions import plot_results, plot_policy, plot_policy_eval, rolloutM, plot_Return, plot_AvgReturn
+from plot import PLOT
 from CACTO import CACTO
 from TO import TO_Pyomo, TO_Casadi
 from RL import RL_AC 
 import numpy as np
 import random
 import time
-
+import math
 
 def run():
 
@@ -21,6 +21,7 @@ def run():
 
     ### Select system and TO method ###
     system = 'double_integrator'
+    #system = 'manipulator'
     TO_method = 'pyomo'
     seed = 123
     ##################################
@@ -29,9 +30,15 @@ def run():
     if system == 'manipulator':
         import manipulator_conf as conf
         from environment import Manipulator as Environment
+
+        init_states_sim = [np.array([math.pi/4,-math.pi/8,-math.pi/8,0.0,0.0,0.0,0.0]),np.array([-math.pi/4,math.pi/8,math.pi/8,0.0,0.0,0.0,0.0]),np.array([math.pi/2,0.0,0.0,0.0,0.0,0.0,0.0]),np.array([-math.pi/2,0.0,0.0,0.0,0.0,0.0,0.0]),np.array([3*math.pi/4,0.0,0.0,0.0,0.0,0.0,0.0]),np.array([-3*math.pi/4,0.0,0.0,0.0,0.0,0.0,0.0]),np.array([math.pi/4,0.0,0.0,0.0,0.0,0.0,0.0]),np.array([-math.pi/4,0.0,0.0,0.0,0.0,0.0,0.0]),np.array([math.pi,0.0,0.0,0.0,0.0,0.0,0.0])]
+
     elif system == 'double_integrator':
         import double_integrator_conf as conf
         from environment import DoubleIntegrator as Environment
+
+        init_states_sim = [np.array([2.0,0.0,0.0,0.0,0.0]),np.array([10.0,0.0,0.0,0.0,0.0]),np.array([10.0,-10.0,0.0,0.0,0.0]),np.array([10.0,10.0,0.0,0.0,0.0]),np.array([-10.0,10.0,0.0,0.0,0.0]),np.array([-10.0,-10.0,0.0,0.0,0.0]),np.array([12.0,2.0,0.0,0.0,0.0]),np.array([12.0,-2.0,0.0,0.0,0.0]),np.array([15.0,0.0,0.0,0.0,0.0])]
+
     else:
         print('System: ' + system + ' not found')
 
@@ -103,6 +110,9 @@ def run():
     # Create RL_AC instance 
     RLAC = RL_AC(env, conf)
 
+    # Create PLOT instance
+    plot_fun = PLOT(env, conf)
+
     # Set initial weights of the NNs and initialize the counter of the updates
     if conf.recover_stopped_training:
         nb_starting_episode = ((conf.update_step_counter/conf.UPDATE_LOOPS)*conf.EP_UPDATE)+1
@@ -127,11 +137,12 @@ def run():
 
         # Plot rollouts every conf.log_rollout_interval-training episodes (saved in a separate folder)
         if ep >= conf.ep_no_update and ep%conf.log_rollout_interval==0:
-            _, _, _, _, _ = rolloutM(update_step_counter, CACTO.actor_model, env, rand_time, conf.N_try, diff_loc=1)     
+            print('ciao')
+            _, _, _ = plot_fun.rollout(update_step_counter, CACTO.actor_model, env, rand_time, init_states_sim, diff_loc=1)     
 
         # Plot rollouts and save the NNs every conf.log_rollout_interval-training episodes
         if ep >= conf.ep_no_update and conf.log_interval!=1 and conf.log_interval!=0 and ep%conf.log_interval==0: 
-            #_, _, _, _, _ = rollout(update_step_counter, CACTO.actor_model, env, rand_time, conf.N_try)        
+            _, _, _ = plot_fun.rollout(update_step_counter, CACTO.actor_model, env, rand_time, init_states_sim)        
             CACTO.actor_model.save_weights(conf.NNs_path+"/Manipulator_{}.h5".format(update_step_counter))
             CACTO.critic_model.save_weights(conf.NNs_path+"/Manipulator_critic_{}.h5".format(update_step_counter))
             CACTO.target_critic.save_weights(conf.NNs_path+"/Manipulator_target_critic_{}.h5".format(update_step_counter))
@@ -146,8 +157,8 @@ def run():
     print('Elapsed time: ', time_end-time_start)
 
     # Plot returns
-    # plot_AvgReturn()
-    # plot_Return()
+    # plot_fun.plot_AvgReturn(avg_reward_list)
+    # plot_fun.plot_Return(ep_reward_list)
 
     # Save networks at the end of the training
     CACTO.actor_model.save_weights(conf.NNs_path+"/"+system+"_actor_final.h5")
@@ -155,7 +166,7 @@ def run():
     CACTO.target_critic.save_weights(conf.NNs_path+"/"+system+"_target_critic_final.h5")
 
     # Simulate the final policy
-    tau0_all_final_sim, tau1_all_final_sim, x_ee_all_final_sim, y_ee_all_final_sim = rolloutM(update_step_counter)
+    #tau_all_final_sim, x_ee_all_final_sim, y_ee_all_final_sim = rollout(update_step_counter)
 
 
 

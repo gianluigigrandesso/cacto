@@ -7,7 +7,6 @@ from CACTO import CACTO
 import numpy as np
 import math
 import time
-#import manipulator_conf as conf #only for system parameters (M, l, Iz, ...)
 
 class RL_AC(CACTO):
     def __init__(self, env, conf):
@@ -21,7 +20,7 @@ class RL_AC(CACTO):
         self.UPDATE_LOOPS = conf.UPDATE_LOOPS
         self.UPDATE_RATE = conf.UPDATE_RATE
 
-        self.SOBOLEV = 1
+        self.SOBOLEV = 0
 
         return
 
@@ -47,17 +46,21 @@ class RL_AC(CACTO):
                         tape2.watch(state_batch)
                         critic_value = CACTO.critic_model(state_batch, training=True)                         # Compute batch of Values associated to the sampled batch of states
                         critic_state_grad = tape2.gradient(critic_value, state_batch)
-            else:
-                if self.TD_N: ### !!! ### 
-                    y = reward_batch                                                                           # When using n-step TD, reward_batch is the batch of costs-to-go and not the batch of single step rewards
-                else:    
+            else:   
                     if self.NORMALIZE_INPUTS:
-                        target_values = CACTO.target_critic(next_state_batch_norm, training=True)              # Compute Value at next state after self.nsteps_TD_N steps given by target critic 
+                        if self.TD_N: ### !!! ### 
+                            y = reward_batch     
+                        else:
+                            target_values = CACTO.target_critic(next_state_batch_norm, training=True)              # Compute Value at next state after self.nsteps_TD_N steps given by target critic 
+                            y = reward_batch + (1-d_batch)*target_values                                               # Compute batch of 1-step targets for the critic loss 
                         critic_value = CACTO.critic_model(state_batch_norm, training=True)                     # Compute batch of Values associated to the sampled batch of states
                     else:
-                        target_values = CACTO.target_critic(next_state_batch, training=True)
+                        if self.TD_N: ### !!! ### 
+                            y = reward_batch     
+                        else:
+                            target_values = CACTO.target_critic(next_state_batch, training=True)
+                            y = reward_batch + (1-d_batch)*target_values                                               # Compute batch of 1-step targets for the critic loss 
                         critic_value = CACTO.critic_model(state_batch, training=True)
-                    y = reward_batch + (1-d_batch)*target_values                                               # Compute batch of 1-step targets for the critic loss 
 
             if weights_batch is None:
                 critic_loss = tf.math.reduce_mean(tf.math.square(y - critic_value))                            # Critic loss function (tf.math.reduce_mean computes the mean of elements across dimensions of a tensor, in this case across the batch)
