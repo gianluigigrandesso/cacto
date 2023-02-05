@@ -11,7 +11,7 @@ import math
 
        
 class TO_Pyomo(CACTO):
-    def __init__(self, env, conf):
+    def __init__(self, env, conf, system):
         super(TO_Pyomo, self).__init__(env, conf, init_setup_model=False)
 
         self.soft_max_param = conf.soft_max_param
@@ -22,6 +22,8 @@ class TO_Pyomo(CACTO):
         self.EPISODE_ICS_INIT = conf.EPISODE_ICS_INIT
         self.LR_SCHEDULE = conf.LR_SCHEDULE
         self.state_norm_arr = conf.state_norm_arr
+
+        self.system = system
 
         return
 
@@ -313,14 +315,18 @@ class TO_Pyomo(CACTO):
         while TO==0:
             
             # Randomize initial state 
-            rand_time, prev_state = self.env.reset()
-            #rand_time = random.uniform(0,(self.NSTEPS-1)*self.dt)
-            #prev_state = np.array([random.uniform(-math.pi,math.pi), random.uniform(-math.pi,math.pi), random.uniform(-math.pi,math.pi), 
-            #            random.uniform(-math.pi/4,math.pi/4), random.uniform(-math.pi/4,math.pi/4), random.uniform(-math.pi/4,math.pi/4),
-            #            self.dt*round(rand_time/self.dt)]) 
-            #prev_state = np.array([random.uniform(-15,15), random.uniform(-15,15),
-            #            random.uniform(-6,6), random.uniform(-6,6),
-            #            self.dt*round(rand_time/self.dt)])
+            if self.system == 'double_integrator':
+                rand_time = random.uniform(0,(self.NSTEPS-1)*self.dt)
+                prev_state = np.array([random.uniform(-15,15), random.uniform(-15,15),
+                                       random.uniform(-6,6), random.uniform(-6,6),
+                                       self.dt*round(rand_time/self.dt)])
+            elif self.system == 'manipulator':
+                rand_time = random.uniform(0,(self.NSTEPS-1)*self.dt)
+                prev_state = np.array([random.uniform(-math.pi,math.pi), random.uniform(-math.pi,math.pi), random.uniform(-math.pi,math.pi), 
+                                       random.uniform(-math.pi/4,math.pi/4), random.uniform(-math.pi/4,math.pi/4), random.uniform(-math.pi/4,math.pi/4),
+                                       self.dt*round(rand_time/self.dt)]) 
+            else:
+                rand_time, prev_state = self.env.reset()
                         
             if self.NORMALIZE_INPUTS:
                 prev_state_norm = prev_state / self.state_norm_arr
@@ -370,8 +376,14 @@ class TO_Pyomo(CACTO):
                 
                 init_prev_state = np.copy(init_next_state)
 
-            TO, tau_TO = self.TO_DoubleIntegrator_Solve(ep, prev_state, init_TO_controls, init_TO_states) #self.TO_DoubleIntegrator_Solve(ep, prev_state, init_TO_controls, init_TO_states) # sys_dep #
-            
+            # sys_dep #
+            if self.system == 'double_integrator':
+                TO, tau_TO = self.TO_DoubleIntegrator_Solve(ep, prev_state, init_TO_controls, init_TO_states) 
+            elif self.system == 'manipulator':
+                TO, tau_TO = self.TO_Manipulator_Solve(ep, prev_state, init_TO_controls, init_TO_states)
+            else:
+                print('System model not found')
+
             # Plot TO solution    
             # plot_results_TO(TO_mdl)   
               

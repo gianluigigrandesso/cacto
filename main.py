@@ -20,8 +20,8 @@ def run():
     time_start = time.time()
 
     ### Select system and TO method ###
-    system = 'double_integrator'
-    #system = 'manipulator'
+    #system = 'double_integrator'
+    system = 'manipulator'
     TO_method = 'pyomo'
     seed = 123
     ##################################
@@ -100,9 +100,9 @@ def run():
 
     # Select TO method and create TO instance
     if TO_method == 'pyomo':
-        TrOp = TO_Pyomo(env, conf)
+        TrOp = TO_Pyomo(env, conf, system)
     elif TO_method == 'casadi':
-        TrOp = TO_Casadi(env, conf)
+        TrOp = TO_Casadi(env, conf, system)
     else:
         print('TO method: ' + TO_method + ' not implemented')
         sys.exit()

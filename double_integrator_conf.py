@@ -45,7 +45,7 @@ TARGET_STATE = np.array([x_des,y_des])  # Target state
 
 
 ''' CACTO parameters '''
-ep_no_update = 2 #100                      # Episodes to wait before starting to update the NNs
+ep_no_update = 100 #100                      # Episodes to wait before starting to update the NNs
 NEPISODES = 50000+ep_no_update          # Max training episodes
 EP_UPDATE = 25                          # Number of episodes before updating critic and actor
 NSTEPS = 100                            # Max episode length
@@ -59,7 +59,7 @@ NH1 = 256                               # 1st hidden layer size
 NH2 = 256                               # 2nd hidden layer size
 dt = 0.05                               # Timestep     
 
-log_rollout_interval = 3
+log_rollout_interval = 10
 log_interval = 50
 
 LR_SCHEDULE = 1                         # Flag to use a scheduler for the learning rates
