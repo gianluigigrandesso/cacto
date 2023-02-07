@@ -180,7 +180,18 @@ class TO_Pyomo(CACTO):
             
                 TO = 1
             else:
-                print('TO solution not optimal')                   
+                print('TO solution not optimal')     
+
+                tau0_TO = [TO_mdl.tau0[k]() for k in K]
+                tau1_TO = [TO_mdl.tau1[k]() for k in K]
+                tau2_TO = [TO_mdl.tau2[k]() for k in K]
+                t0 = np.array(tau0_TO).reshape(len(K),1)
+                t1 = np.array(tau1_TO).reshape(len(K),1)
+                t2 = np.array(tau2_TO).reshape(len(K),1)
+                tau_TO = np.concatenate((t0, t1, t2),axis=1)       
+
+                TO = 0       
+
                 raise Exception()         
         except:
             print("*** TO failed ***")  
@@ -300,7 +311,16 @@ class TO_Pyomo(CACTO):
             
                 TO = 1
             else:
-                print('TO solution not optimal')                   
+                print('TO solution not optimal')    
+
+                tau0_TO = [TO_mdl.tau0[k]() for k in K]
+                tau1_TO = [TO_mdl.tau1[k]() for k in K]
+                t0 = np.array(tau0_TO).reshape(len(K),1)
+                t1 = np.array(tau1_TO).reshape(len(K),1)
+                tau_TO = np.concatenate((t0, t1),axis=1)   
+
+                TO = 0
+                            
                 raise Exception()         
         except:
             print("*** TO failed ***")  
@@ -342,14 +362,12 @@ class TO_Pyomo(CACTO):
             CACTO.control_arr = np.empty((0, self.nb_action))
             CACTO.state_arr = np.array([prev_state])
             
-            ###
             CACTO.x_ee_arr = [self.env.get_end_effector_position(CACTO.state_arr[-1,:])[0]]
             CACTO.y_ee_arr = [self.env.get_end_effector_position(CACTO.state_arr[-1,:])[1]] 
-            ###
                  
             # Actor rollout used to initialize TO state and control variables
             init_TO_states = np.zeros((self.nb_state, CACTO.NSTEPS_SH+1))
-            for i in range(self.robot.nv+self.robot.nv):
+            for i in range(self.robot.nq+self.robot.nv):
                 init_TO_states[i][0] = prev_state[i]                    
             init_TO_controls = np.zeros((self.nb_action, CACTO.NSTEPS_SH+1))
             for i in range(self.robot.na):
@@ -382,7 +400,7 @@ class TO_Pyomo(CACTO):
             elif self.system == 'manipulator':
                 TO, tau_TO = self.TO_Manipulator_Solve(ep, prev_state, init_TO_controls, init_TO_states)
             else:
-                print('System model not found')
+                print('Pyomo system model not found')
 
             # Plot TO solution    
             # plot_results_TO(TO_mdl)   
@@ -391,7 +409,7 @@ class TO_Pyomo(CACTO):
 
 class TO_Casadi(CACTO):
     def __init__(self, env, conf):
-        super(TO_Pyomo, self).__init__(env, conf,init_setup_model=False)
+        super(TO_Casadi, self).__init__(env, conf,init_setup_model=False)
 
         print('Not implemented')
         sys.exit()

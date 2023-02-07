@@ -14,16 +14,16 @@ import numpy as np
 import random
 import time
 import math
+import matplotlib.pyplot as plt
 
-def run():
+def run(**kwargs):
 
     time_start = time.time()
 
     ### Select system and TO method ###
-    #system = 'double_integrator'
-    system = 'manipulator'
-    TO_method = 'pyomo'
-    seed = 123
+    system    = kwargs['system'] #'double_integrator'
+    TO_method = kwargs['TO_method']#'pyomo'
+    seed      = 123
     ##################################
 
 
@@ -31,13 +31,9 @@ def run():
         import manipulator_conf as conf
         from environment import Manipulator as Environment
 
-        init_states_sim = [np.array([math.pi/4,-math.pi/8,-math.pi/8,0.0,0.0,0.0,0.0]),np.array([-math.pi/4,math.pi/8,math.pi/8,0.0,0.0,0.0,0.0]),np.array([math.pi/2,0.0,0.0,0.0,0.0,0.0,0.0]),np.array([-math.pi/2,0.0,0.0,0.0,0.0,0.0,0.0]),np.array([3*math.pi/4,0.0,0.0,0.0,0.0,0.0,0.0]),np.array([-3*math.pi/4,0.0,0.0,0.0,0.0,0.0,0.0]),np.array([math.pi/4,0.0,0.0,0.0,0.0,0.0,0.0]),np.array([-math.pi/4,0.0,0.0,0.0,0.0,0.0,0.0]),np.array([math.pi,0.0,0.0,0.0,0.0,0.0,0.0])]
-
     elif system == 'double_integrator':
         import double_integrator_conf as conf
         from environment import DoubleIntegrator as Environment
-
-        init_states_sim = [np.array([2.0,0.0,0.0,0.0,0.0]),np.array([10.0,0.0,0.0,0.0,0.0]),np.array([10.0,-10.0,0.0,0.0,0.0]),np.array([10.0,10.0,0.0,0.0,0.0]),np.array([-10.0,10.0,0.0,0.0,0.0]),np.array([-10.0,-10.0,0.0,0.0,0.0]),np.array([12.0,2.0,0.0,0.0,0.0]),np.array([12.0,-2.0,0.0,0.0,0.0]),np.array([15.0,0.0,0.0,0.0,0.0])]
 
     else:
         print('System: ' + system + ' not found')
@@ -72,7 +68,7 @@ def run():
         pass
 
     # Save config file
-    f=open(conf.Config_path+'/'+system+'_config{}.txt'.format(conf.N_try), 'w')
+    f=open(conf.Config_path+'/config{}.txt'.format(conf.N_try), 'w')
     f.write("conf.NEPISODES = {}, conf.NSTEPS = {}, conf.CRITIC_LEARNING_RATE = {}, conf.ACTOR_LEARNING_RATE = {}, conf.UPDATE_RATE = {}, conf.REPLAY_SIZE = {}, conf.BATCH_SIZE = {}, conf.NH1 = {}, conf.NH2 = {}, conf.dt = {}".format(conf.NEPISODES,conf.NSTEPS,conf.CRITIC_LEARNING_RATE,conf.ACTOR_LEARNING_RATE,conf.UPDATE_RATE,conf.REPLAY_SIZE,conf.BATCH_SIZE,conf.NH1,conf.NH2,conf.dt)+
             "\n"+str(conf.UPDATE_LOOPS)+" updates every {} episodes".format(conf.EP_UPDATE)+
             "\n\nReward = ({}*(-(x_ee-conf.TARGET_STATE[0])**2 -(y_ee-conf.TARGET_STATE[1])**2) + {}*peak_reward - {}*vel_joint - {}*ell1_pen - {}*ell2_pen - {}*ell3_pen - {}*(u[0]**2 + u[1]**2 + u[2]**2))/100, vel_joint = x2[3]**2 + x2[4]**2 + x2[5]**2 - 10000/{} if final step else 0, peak reward = math.log(math.exp({}*-(x_err-0.1 + y_err-0.1)) + 1)/{}, x_err = math.sqrt((x_ee-conf.TARGET_STATE[0])**2 +0.1) - math.sqrt(0.1), y_err = math.sqrt((y_ee-conf.TARGET_STATE[1])**2 +0.1) - math.sqrt(0.1), ell_pen = log(exp({}*-(((x_ee-XC)**2)/((a/2)**2) + ((y_ee-YC)**2)/((conf.B1/2)**2) - 1.0)) + 1)/{}".format(conf.w_d,conf.w_peak,conf.w_v,conf.w_ob,conf.w_ob,conf.w_ob,conf.w_u,conf.w_v,conf.alpha2,conf.alpha2,conf.alpha,conf.alpha)+
@@ -92,7 +88,7 @@ def run():
 
     # Create environment 
     env = Environment(conf.dt, conf.x_init_min, conf.x_init_max, conf.x_min, conf.x_max, conf.u_min, conf.u_max, conf.TARGET_STATE, conf.soft_max_param, conf.obs_param, conf.weight, conf.robot, conf.nb_state, conf.nb_action, conf.NORMALIZE_INPUTS, conf.state_norm_arr, conf.simu) 
-    #env.seed(seed=seed)
+    env.seed(seed=seed)
 
     # Create CACTO instance
     cacto_instance = CACTO(env, conf)
@@ -126,6 +122,9 @@ def run():
     ep_reward_list = []                                                                                     
     avg_reward_list = []
 
+    plt.ion()
+    fig = plt.figure(system)
+
     ### START TRAINING ###
     for ep in range(nb_starting_episode,conf.NEPISODES): 
 
@@ -137,19 +136,22 @@ def run():
 
         # Plot rollouts every conf.log_rollout_interval-training episodes (saved in a separate folder)
         if ep >= conf.ep_no_update and ep%conf.log_rollout_interval==0:
-            print('ciao')
-            _, _, _ = plot_fun.rollout(update_step_counter, CACTO.actor_model, env, rand_time, init_states_sim, diff_loc=1)     
+            _, _, _ = plot_fun.rollout(update_step_counter, CACTO.actor_model, env, rand_time, conf.init_states_sim, diff_loc=1)     
 
         # Plot rollouts and save the NNs every conf.log_rollout_interval-training episodes
         if ep >= conf.ep_no_update and conf.log_interval!=1 and conf.log_interval!=0 and ep%conf.log_interval==0: 
-            _, _, _ = plot_fun.rollout(update_step_counter, CACTO.actor_model, env, rand_time, init_states_sim)        
-            CACTO.actor_model.save_weights(conf.NNs_path+"/Manipulator_{}.h5".format(update_step_counter))
-            CACTO.critic_model.save_weights(conf.NNs_path+"/Manipulator_critic_{}.h5".format(update_step_counter))
-            CACTO.target_critic.save_weights(conf.NNs_path+"/Manipulator_target_critic_{}.h5".format(update_step_counter))
-
+            #_, _, _ = plot_fun.rollout(update_step_counter, CACTO.actor_model, env, rand_time, conf.init_states_sim)        
+            CACTO.actor_model.save_weights(conf.NNs_path+"/actor_{}.h5".format(update_step_counter))
+            CACTO.critic_model.save_weights(conf.NNs_path+"/critic_{}.h5".format(update_step_counter))
+            CACTO.target_critic.save_weights(conf.NNs_path+"/target_critic_{}.h5".format(update_step_counter))
+ 
         # ep_reward_list.append(ep_return)
         # avg_reward = np.mean(ep_reward_list[-40:])  # Mean of last 40 episodes
         # avg_reward_list.append(avg_reward)
+
+        #plt.clf()
+        #plt.plot(CACTO.critic_loss_tot, 'r-', label='Reward')
+        #plt.savefig(conf.Log_path + "Loss value.png")
 
         print("Episode  {}  --->   Return = {}".format(ep, ep_return))
 
@@ -168,11 +170,26 @@ def run():
     # Simulate the final policy
     #tau_all_final_sim, x_ee_all_final_sim, y_ee_all_final_sim = rollout(update_step_counter)
 
+def parse_args():
+    """
+    parse the arguments for DDPG training
+
+    :return: (dict) the arguments
+    """
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+    parser.add_argument('--system',                         type=str,   default='-')
+    parser.add_argument('--TO-method',                      type=str,   default='pyomo')
+    args = parser.parse_args()
+    dict_args = vars(args)
+    return dict_args
+
 
 
 
 if __name__ == '__main__':
-    run()
+    args = parse_args()
+    run(**args)
 
 
 

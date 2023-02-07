@@ -13,6 +13,8 @@ class CACTO():
     state_arr = None
     x_ee_arr = []
     y_ee_arr = []
+
+    critic_loss_tot = []
     
     actor_model = None
     critic_model = None
@@ -123,8 +125,8 @@ class CACTO():
 
         # Set initial weights of the NNs
         if self.recover_stopped_training: 
-            CACTO.actor_model.load_weights(self.NNs_path+"/Manipulator_{}.h5".format(self.update_step_counter))
-            CACTO.critic_model.load_weights(self.NNs_path+"/Manipulator_critic{}.h5".format(self.update_step_counter))
-            CACTO.target_critic.load_weights(self.NNs_path+"/Manipulator_target_critic{}.h5".format(self.update_step_counter))
+            CACTO.actor_model.load_weights(self.NNs_path+"/actor_{}.h5".format(self.update_step_counter))
+            CACTO.critic_model.load_weights(self.NNs_path+"/critic_{}.h5".format(self.update_step_counter))
+            CACTO.target_critic.load_weights(self.NNs_path+"/target_critic_{}.h5".format(self.update_step_counter))
         else:
             CACTO.target_critic.set_weights(CACTO.critic_model.get_weights())   

@@ -19,8 +19,7 @@ class RL_AC(CACTO):
         self.state_norm_arr = conf.state_norm_arr
         self.UPDATE_LOOPS = conf.UPDATE_LOOPS
         self.UPDATE_RATE = conf.UPDATE_RATE
-
-        self.SOBOLEV = 0
+        self.SOBOLEV = conf.SOBOLEV
 
         return
 
@@ -46,30 +45,37 @@ class RL_AC(CACTO):
                         tape2.watch(state_batch)
                         critic_value = CACTO.critic_model(state_batch, training=True)                         # Compute batch of Values associated to the sampled batch of states
                         critic_state_grad = tape2.gradient(critic_value, state_batch)
+                        
+                der = critic_state_grad-target_grad
+                if weights_batch is None:
+                    critic_loss = tf.math.reduce_mean(tf.math.square(y - critic_value)) + 1e1*tf.math.reduce_mean(tf.square(der))                              # Critic loss function (tf.math.reduce_mean computes the mean of elements across dimensions of a tensor, in this case across the batch)
+                else:
+                    critic_loss = tf.math.reduce_mean(tf.math.square(tf.math.multiply(weights_batch,(y - critic_value)))) + 1e1*tf.math.reduce_mean(tf.square(der)) #np.clip(der,0,1e5)      # tf.math.reduce_mean computes the mean of elements across dimensions of a tensor
             else:   
-                    if self.NORMALIZE_INPUTS:
-                        if self.TD_N: ### !!! ### 
-                            y = reward_batch     
-                        else:
-                            target_values = CACTO.target_critic(next_state_batch_norm, training=True)              # Compute Value at next state after self.nsteps_TD_N steps given by target critic 
-                            y = reward_batch + (1-d_batch)*target_values                                               # Compute batch of 1-step targets for the critic loss 
-                        critic_value = CACTO.critic_model(state_batch_norm, training=True)                     # Compute batch of Values associated to the sampled batch of states
+                if self.NORMALIZE_INPUTS:
+                    if self.TD_N:  
+                        y = reward_batch    
                     else:
-                        if self.TD_N: ### !!! ### 
-                            y = reward_batch     
-                        else:
-                            target_values = CACTO.target_critic(next_state_batch, training=True)
-                            y = reward_batch + (1-d_batch)*target_values                                               # Compute batch of 1-step targets for the critic loss 
-                        critic_value = CACTO.critic_model(state_batch, training=True)
+                        target_values = CACTO.target_critic(next_state_batch_norm, training=True)              # Compute Value at next state after self.nsteps_TD_N steps given by target critic 
+                        y = reward_batch + (1-d_batch)*target_values                                           # Compute batch of 1-step targets for the critic loss 
+                    critic_value = CACTO.critic_model(state_batch_norm, training=True)                         # Compute batch of Values associated to the sampled batch of states
+                else:
+                    if self.TD_N: 
+                        y = reward_batch    
+                    else:
+                        target_values = CACTO.target_critic(next_state_batch, training=True)
+                        y = reward_batch + (1-d_batch)*target_values   
+                    critic_value = CACTO.critic_model(state_batch, training=True)
 
-            if weights_batch is None:
-                critic_loss = tf.math.reduce_mean(tf.math.square(y - critic_value))                            # Critic loss function (tf.math.reduce_mean computes the mean of elements across dimensions of a tensor, in this case across the batch)
-            else:
-                if self.SOBOLEV:
-                    der = tf.math.reduce_mean(tf.norm(critic_state_grad-target_grad, axis=1)) 
-                    critic_loss = tf.math.reduce_mean(tf.math.square((y - critic_value))) + 5e-1*np.clip(der,0,1e5)      # tf.math.reduce_mean computes the mean of elements across dimensions of a tensor
+                if weights_batch is None:
+                    critic_loss = tf.math.reduce_mean(tf.math.square(y - critic_value))                         # Critic loss function (tf.math.reduce_mean computes the mean of elements across dimensions of a tensor, in this case across the batch)
                 else:
                     critic_loss = tf.math.reduce_mean(tf.math.square(tf.math.multiply(weights_batch,(y - critic_value))))   
+        
+        CACTO.critic_loss_tot.append(np.array(critic_loss))
+
+        #with open(self.conf.Log_path + 'Value_loss', 'a') as file:
+        #    file.write(str(np.array(critic_loss)) + '\n')
 
         # Compute the gradients of the critic loss w.r.t. critic's parameters
         critic_grad = tape.gradient(critic_loss, CACTO.critic_model.trainable_variables)   
@@ -83,6 +89,7 @@ class RL_AC(CACTO):
                 actions = CACTO.actor_model(red_state_batch_norm, training=True)
             else:
                 actions = CACTO.actor_model(red_state_batch, training=True)
+
             # Both take into account normalization, ds_next_da is the gradient of the dynamics w.r.t. policy actions (ds'_da)
             next_state_tf, ds_next_da = self.env.simulate_and_derivative_tf(red_state_batch,actions.numpy(),self.batch_size)
             with tf.GradientTape() as tape:
@@ -100,6 +107,7 @@ class RL_AC(CACTO):
             dr_ds_next_dV_ds_next = tf.matmul(dr_ds_next_dV_ds_next_reshaped,ds_next_da)                                # (dr_ds' + dV_ds')*ds'_da
             dr_da_reshaped = tf.reshape(dr_da,(self.batch_size,1,self.nb_action))                                       
             tf_sum = dr_ds_next_dV_ds_next + dr_da_reshaped                                                             # (dr_ds' + dV_ds')*ds'_da + dr_da
+
             # Now let's multiply -[(dr_ds' + dV_ds')*ds'_da + dr_da] by the actions a 
             # and then let's autodifferentiate w.r.t theta_A (actor NN's parameters) to finally get -dQ/dtheta_A 
             with tf.GradientTape() as tape:
@@ -200,10 +208,8 @@ class RL_AC(CACTO):
             CACTO.control_arr = np.vstack([CACTO.control_arr, action.reshape(1,self.nb_action)])
             CACTO.state_arr = np.vstack([CACTO.state_arr, next_state.reshape(1,self.nb_state)])
             
-            ###
             CACTO.x_ee_arr.append(self.env.get_end_effector_position(CACTO.state_arr[-1,:])[0])
             CACTO.y_ee_arr.append(self.env.get_end_effector_position(CACTO.state_arr[-1,:])[1])
-            ###
 
             ep_arr.append(rwrd)
 
@@ -266,124 +272,3 @@ class RL_AC(CACTO):
             next_actions = np.copy(actions) # Actions at last step of the episode are not performed 
 
         return actions, next_actions
-
-
-
-    def sanity_check(self, state_batch_norm, grad, y, N_TESTS=1):
-        ''' Compare the gradient computed with finite differences with the one
-            computed by deriving the integrator
-        '''
-        eps = 1e-3
-        y_eps = np.copy(np.array(state_batch_norm))
-        grad_fd = np.zeros_like(state_batch_norm)
-        for j in range(y_eps.shape[0]):
-            for k in range(y_eps.shape[1]):
-                y_eps[j,k] += eps
-
-                cost_fd = CACTO.critic_model(tf.cast(y_eps, tf.float32), training=True)
-                grad_fd[j,k] = (cost_fd[j] - y[j]) / eps
-
-                y_eps[j,k] = state_batch_norm[j,k]
-
-        tr_min = 0
-        for jj in range(y_eps.shape[0]):
-            for kk in range(y_eps.shape[1]):
-                if np.abs(grad_fd[jj,kk]) < 1e-6:
-                    grad_err = 1e-10
-                    print('too small', grad[jj,kk], grad_fd[jj,kk])
-                else:    
-                    grad_err = np.abs((grad[jj,kk]-grad_fd[jj,kk])/(grad_fd[jj,kk]))
-                if grad_err > tr_min:
-                    tr_min=grad_err
-                    print(np.array(grad[jj,kk]), grad_fd[jj,kk])
-            
-        if(tr_min>1e-2): 
-            print('Gradient 1 computation is NOT correct. Relative error=', tr_min) #
-            time.sleep(5)
-        else:
-            print('Everything 1 is fine ', tr_min)
-
-
-    def sanity_check2(self, state_batch, action_batch, d_batch, grad, y, N_TESTS=1): 
-
-        ''' Compare the gradient computed with finite differences with the one
-            computed by deriving the integrator
-        '''
-        eps = 1e-2
-        y_eps = np.copy(np.array(state_batch))
-
-        grad_fd = np.zeros_like(state_batch)
-        for j in range(y_eps.shape[0]):
-            for k in range(y_eps.shape[1]):
-                y_eps[j,k] += eps
-  
-                next_state_tf = self.env.simulate_tf(tf.cast(y_eps, tf.float32),action_batch)       
-                rewards_tf = self.env.reward_tf(next_state_tf, action_batch, self.batch_size, d_batch)                           # We need also the batch of rewards associated to the batches of next states and actions
-                target_values = CACTO.target_critic(next_state_tf, training=True)
-                y_fd = rewards_tf + (1-d_batch)*(target_values)
-                grad_fd[j,k] = (y_fd[j] - y[j]) / eps
-                
-                y_eps[j,k] = state_batch[j,k]
-
-        tr_min = 0
-        for jj in range(y_eps.shape[0]):
-            for kk in range(y_eps.shape[1]):
-                if np.abs(grad_fd[jj,kk]) < 1e-6:
-                    grad_err = 1e-10
-                    print('too small', grad[jj,kk], grad_fd[jj,kk])
-                else:    
-                    grad_err = np.abs((grad[jj,kk]-grad_fd[jj,kk])/(grad_fd[jj,kk]))
-                if grad_err > tr_min:
-                    tr_min=grad_err
-                    print(np.array(grad[jj,kk]), grad_fd[jj,kk])
-    
-            
-        if(tr_min>1e-2): 
-            print('Gradient 2 computation is NOT correct. Relative error=', tr_min) #
-        else:
-            print('Everything 2 is fine ', tr_min)
-
-
-
-
-'''
-if self.SOBOLEV:
-                with tf.GradientTape() as tape3:
-                    tape3.watch(state_batch)
-                    #x2_time = tf.stack([np.zeros(self.batch_size), np.zeros(self.batch_size), np.zeros(self.batch_size), np.zeros(self.batch_size), np.zeros(self.batch_size), np.zeros(self.batch_size), (state_batch_norm[:,-1]+1)*self.state_norm_arr[-1]/2],1)
-                    #x2 = state_batch_norm * self.state_norm_arr
-                    #mask = tf.cast(tf.stack([np.ones(self.batch_size), np.ones(self.batch_size), np.ones(self.batch_size), np.ones(self.batch_size), np.ones(self.batch_size), np.ones(self.batch_size), np.zeros(self.batch_size)],1),tf.float32)
-                    #x2 = x2 * mask + x2_time * (1 - mask)
-                    next_state_tf = self.env.simulate_tf(state_batch,action_batch)      
-                    rewards_tf = self.env.reward_tf(next_state_tf, action_batch, self.batch_size, d_batch)                           # We need also the batch of rewards associated to the batches of next states and actions
-                    target_values = CACTO.target_critic(next_state_tf, training=True)
-                    y = rewards_tf + (1-d_batch)*(target_values)
-                    target_grad = tape3.gradient(y, state_batch)
-            else:
-                if self.TD_N:
-                    y = reward_batch                                                        # When using n-step TD, reward_batch is the batch of costs-to-go and not the batch of single step rewards
-                else:    
-                    if self.NORMALIZE_INPUTS:
-                        target_values = CACTO.target_critic(next_state_batch_norm, training=True) # Compute Value at next state after self.nsteps_TD_N steps given by target critic 
-                    else:
-                        target_values = CACTO.target_critic(next_state_batch, training=True)
-                    y = reward_batch + (1-d_batch)*target_values                            # Compute batch of 1-step targets for the critic loss 
-
-            if self.NORMALIZE_INPUTS:
-                if self.SOBOLEV:
-                    with tf.GradientTape() as tape2:
-                        tape2.watch(state_batch_norm)
-                        critic_value = CACTO.critic_model(state_batch_norm, training=True)                                 # Compute batch of Values associated to the sampled batch of states
-                        critic_state_grad = tape2.gradient(critic_value, state_batch_norm)
-                else:
-                    critic_value = CACTO.critic_model(state_batch_norm, training=True)            # Compute batch of Values associated to the sampled batch of states
-            else:
-                if self.SOBOLEV:
-                    with tf.GradientTape() as tape2:
-                        tape2.watch(state_batch)
-                        critic_value = CACTO.critic_model(state_batch, training=True)                                 # Compute batch of Values associated to the sampled batch of states
-                        grad = tape2.gradient(critic_value, state_batch)
-                        critic_state_grad = tf.norm(grad,axis=1) ### ??? ###
-                else:
-                    critic_value = CACTO.critic_model(state_batch, training=True)
-'''
