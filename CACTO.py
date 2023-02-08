@@ -6,15 +6,65 @@ from pyomo.dae import *
 import numpy as np
 
 class CACTO():
-    # Initialize variables used both in TO and RL
+    ''' 
+    ### CACTO and NNs parameters ###
+    :param batch_size:                  (int) Size of the mini-batch
+    :param NORMALIZE_INPUTS:            (bool) Flag to normalize inputs (state and action)
+    :param EPISODE_CRITIC_PRETRAINING:  (int) Episodes of critic pretraining
+    :param TD_N:                        (bool) Flag to use n-step TD rather than 1-step TD
+    :param nsteps_TD_N:                 (int) Number of lookahed steps
+    :param prioritized_replay_eps:      (foat) Small positive constant that prevents the edge-case of transitions not being revisited once their error is zero
+    :param prioritized_replay_alpha:    (float) Determines how much prioritization is used, set to 0 to use a normal buffer
+    :param UPDATE_LOOPS:                (int) Number of updates of both critic and actor performed every EP_UPDATE episodes 
+    :param SOBOLEV:                     (bool) Flag to use Sobolev training
+    :param NSTEPS:                      (int) Max episode length
+    :param EPISODE_ICS_INIT:            (int) Episodes where ICS warm-starting is used instead of actor rollout
 
+    :param LR_SCHEDULE:                 (bool) Flag to use a scheduler for the learning rates
+    :param NH1:                         (int) 1st hidden layer size
+    :param NH2:                         (int) 2st hidden layer size 
+    :param wreg_l1_A:                   (float) Weight of L1 regularization in actor's network
+    :param wreg_l2_A:                   (float) Weight of L2 regularization in actor's network
+    :param wreg_l1_C:                   (float) Weight of L1 regularization in critic's network
+    :param wreg_l2_C:                   (float) Weight of L2 regularization in critic's network
+    :param boundaries_schedule_LR_C:    (float list) 
+    :param values_schedule_LR_C:        (float list) Values of critic LR 
+    :param boundaries_schedule_LR_A:    (float list) 
+    :param values_schedule_LR_A:        (float list) Values of actor LR 
+    :param UPDATE_RATE:                 (float) Homotopy rate to update the target critic network
+    :param CRITIC_LEARNING_RATE:        (float) Learning rate for the critic network
+    :param ACTOR_LEARNING_RATE:         (float) Learning rate for the policy network
+
+    ### Recover training parameters ###
+    :param recover_stopped_training:    (bool) Flag to recover training
+    :param update_step_counter:         (int) Recover training step number
+
+    ### Save path ###
+    :param NNs_path:                    (str) NNs save path
+
+    ### Cost function parameters ###
+    :param soft_max_param:              (array float) Soft parameters vector
+    :param obs_param:                   (array float) Obtacle parameters vector
+    :param weight:                      (array float) Weights vector
+    :param TARGET_STATE:                (array float) Target position
+
+    ### Robot parameters ###
+    :param dt:                          (float) 
+    :param robot:                       (Robot Wrapper instance) 
+    :param nb_state:                    (int) 
+    :param nb_action:                   (int) 
+    :param u_min:                       (array float) 
+    :param u_max:                       (array float) 
+    :param state_norm_arr:              (array float) 
+    '''
+
+
+    # Initialize variables used both in TO and RL
     NSTEPS_SH = None
     control_arr = None
     state_arr = None
     x_ee_arr = []
     y_ee_arr = []
-
-    critic_loss_tot = []
     
     actor_model = None
     critic_model = None
@@ -29,34 +79,6 @@ class CACTO():
         self.env = env
         self.conf = conf
 
-        self.batch_size = conf.BATCH_SIZE
-        self.NORMALIZE_INPUTS = conf.NORMALIZE_INPUTS
-        self.EPISODE_CRITIC_PRETRAINING = conf.EPISODE_CRITIC_PRETRAINING
-        self.dt = conf.dt
-        self.LR_SCHEDULE = conf.LR_SCHEDULE
-        self.update_step_counter = conf.update_step_counter
-        self.NH1 = conf.NH1
-        self.NH2 = conf.NH2
-        self.wreg_l1_A = conf.wreg_l1_A
-        self.wreg_l2_A = conf.wreg_l2_A
-        self.wreg_l1_C = conf.wreg_l1_C
-        self.wreg_l2_C = conf.wreg_l2_C
-        self.boundaries_schedule_LR_C = conf.boundaries_schedule_LR_C
-        self.values_schedule_LR_C = conf.values_schedule_LR_C
-        self.boundaries_schedule_LR_A = conf.boundaries_schedule_LR_A
-        self.values_schedule_LR_A = conf.values_schedule_LR_A
-        self.CRITIC_LEARNING_RATE = conf.CRITIC_LEARNING_RATE
-        self.ACTOR_LEARNING_RATE = conf.ACTOR_LEARNING_RATE
-        self.recover_stopped_training = conf.recover_stopped_training
-        self.NNs_path = conf.NNs_path
-
-        self.robot = conf.robot
-        self.u_min = conf.u_min
-        self.u_max = conf.u_max
-        self.nb_state = conf.nb_state
-        self.nb_action = conf.nb_action
-        self.state_norm_arr = conf.state_norm_arr
-
         return
 
     # Update target critic NN
@@ -70,37 +92,37 @@ class CACTO():
     # Create actor NN 
     def get_actor(self):
 
-        inputs = layers.Input(shape=(self.nb_state,))
+        inputs = layers.Input(shape=(self.conf.nb_state,))
 
-        lay1 = layers.Dense(self.NH1,kernel_regularizer=regularizers.l1_l2(self.wreg_l1_A,self.wreg_l2_A),bias_regularizer=regularizers.l1_l2(self.wreg_l1_A,self.wreg_l2_A))(inputs)                                        
+        lay1 = layers.Dense(self.conf.NH1,kernel_regularizer=regularizers.l1_l2(self.conf.wreg_l1_A,self.conf.wreg_l2_A),bias_regularizer=regularizers.l1_l2(self.conf.wreg_l1_A,self.conf.wreg_l2_A))(inputs)                                        
         leakyrelu1 = layers.LeakyReLU()(lay1)
     
-        lay2 = layers.Dense(self.NH2, kernel_regularizer=regularizers.l1_l2(self.wreg_l1_A,self.wreg_l2_A),bias_regularizer=regularizers.l1_l2(self.wreg_l1_A,self.wreg_l2_A))(leakyrelu1)                                           
+        lay2 = layers.Dense(self.conf.NH2, kernel_regularizer=regularizers.l1_l2(self.conf.wreg_l1_A,self.conf.wreg_l2_A),bias_regularizer=regularizers.l1_l2(self.conf.wreg_l1_A,self.conf.wreg_l2_A))(leakyrelu1)                                           
         leakyrelu2 = layers.LeakyReLU()(lay2)
 
-        outputs = layers.Dense(self.nb_action, activation="tanh", kernel_regularizer=regularizers.l1_l2(self.wreg_l1_A,self.wreg_l2_A),bias_regularizer=regularizers.l1_l2(self.wreg_l1_A,self.wreg_l2_A))(leakyrelu2) 
+        outputs = layers.Dense(self.conf.nb_action, activation="tanh", kernel_regularizer=regularizers.l1_l2(self.conf.wreg_l1_A,self.conf.wreg_l2_A),bias_regularizer=regularizers.l1_l2(self.conf.wreg_l1_A,self.conf.wreg_l2_A))(leakyrelu2) 
 
-        outputs = outputs * self.u_max          # Bound actions
+        outputs = outputs * self.conf.u_max          # Bound actions
         model = tf.keras.Model(inputs, outputs)
         return model 
 
     # Create critic NN 
     def get_critic(self): 
 
-        state_input = layers.Input(shape=(self.nb_state,))
-        state_out1 = layers.Dense(16, kernel_regularizer=regularizers.l1_l2(self.wreg_l1_C,self.wreg_l2_C),bias_regularizer=regularizers.l1_l2(self.wreg_l1_C,self.wreg_l2_C))(state_input) 
+        state_input = layers.Input(shape=(self.conf.nb_state,))
+        state_out1 = layers.Dense(16, kernel_regularizer=regularizers.l1_l2(self.conf.wreg_l1_C,self.conf.wreg_l2_C),bias_regularizer=regularizers.l1_l2(self.conf.wreg_l1_C,self.conf.wreg_l2_C))(state_input) 
         leakyrelu1 = layers.LeakyReLU()(state_out1)
 
-        state_out2 = layers.Dense(32, kernel_regularizer=regularizers.l1_l2(self.wreg_l1_C,self.wreg_l2_C),bias_regularizer=regularizers.l1_l2(self.wreg_l1_C,self.wreg_l2_C))(leakyrelu1) 
+        state_out2 = layers.Dense(32, kernel_regularizer=regularizers.l1_l2(self.conf.wreg_l1_C,self.conf.wreg_l2_C),bias_regularizer=regularizers.l1_l2(self.conf.wreg_l1_C,self.conf.wreg_l2_C))(leakyrelu1) 
         leakyrelu2 = layers.LeakyReLU()(state_out2)
 
-        out_lay1 = layers.Dense(self.NH1, kernel_regularizer=regularizers.l1_l2(self.wreg_l1_C,self.wreg_l2_C),bias_regularizer=regularizers.l1_l2(self.wreg_l1_C,self.wreg_l2_C))(leakyrelu2)
+        out_lay1 = layers.Dense(self.conf.NH1, kernel_regularizer=regularizers.l1_l2(self.conf.wreg_l1_C,self.conf.wreg_l2_C),bias_regularizer=regularizers.l1_l2(self.conf.wreg_l1_C,self.conf.wreg_l2_C))(leakyrelu2)
         leakyrelu3 = layers.LeakyReLU()(out_lay1)
 
-        out_lay2 = layers.Dense(self.NH2, kernel_regularizer=regularizers.l1_l2(self.wreg_l1_C,self.wreg_l2_C),bias_regularizer=regularizers.l1_l2(self.wreg_l1_C,self.wreg_l2_C))(leakyrelu3)
+        out_lay2 = layers.Dense(self.conf.NH2, kernel_regularizer=regularizers.l1_l2(self.conf.wreg_l1_C,self.conf.wreg_l2_C),bias_regularizer=regularizers.l1_l2(self.conf.wreg_l1_C,self.conf.wreg_l2_C))(leakyrelu3)
         leakyrelu4 = layers.LeakyReLU()(out_lay2)
 
-        outputs = layers.Dense(1, kernel_regularizer=regularizers.l1_l2(self.wreg_l1_C,self.wreg_l2_C),bias_regularizer=regularizers.l1_l2(self.wreg_l1_C,self.wreg_l2_C))(leakyrelu4)
+        outputs = layers.Dense(1, kernel_regularizer=regularizers.l1_l2(self.conf.wreg_l1_C,self.conf.wreg_l2_C),bias_regularizer=regularizers.l1_l2(self.conf.wreg_l1_C,self.conf.wreg_l2_C))(leakyrelu4)
 
         model = tf.keras.Model([state_input], outputs)
 
@@ -114,10 +136,10 @@ class CACTO():
         CACTO.target_critic = self.get_critic()
 
         # Set optimizer specifying the learning rates
-        if self.LR_SCHEDULE:
+        if self.conf.LR_SCHEDULE:
             # Piecewise constant decay schedule
-            CACTO.CRITIC_LR_SCHEDULE = tf.keras.optimizers.schedules.PiecewiseConstantDecay(self.boundaries_schedule_LR_C, self.values_schedule_LR_C) 
-            CACTO.ACTOR_LR_SCHEDULE  = tf.keras.optimizers.schedules.PiecewiseConstantDecay(self.boundaries_schedule_LR_A, self.values_schedule_LR_A)
+            CACTO.CRITIC_LR_SCHEDULE = tf.keras.optimizers.schedules.PiecewiseConstantDecay(self.conf.boundaries_schedule_LR_C, self.conf.values_schedule_LR_C) 
+            CACTO.ACTOR_LR_SCHEDULE  = tf.keras.optimizers.schedules.PiecewiseConstantDecay(self.conf.boundaries_schedule_LR_A, self.conf.values_schedule_LR_A)
             CACTO.critic_optimizer   = tf.keras.optimizers.Adam(CACTO.CRITIC_LR_SCHEDULE)
             CACTO.actor_optimizer    = tf.keras.optimizers.Adam(CACTO.ACTOR_LR_SCHEDULE)
         else:
@@ -125,9 +147,9 @@ class CACTO():
             CACTO.actor_optimizer    = tf.keras.optimizers.Adam(CACTO.ACTOR_LEARNING_RATE)
 
         # Set initial weights of the NNs
-        if self.recover_stopped_training: 
-            CACTO.actor_model.load_weights(self.NNs_path+"/actor_{}.h5".format(self.update_step_counter))
-            CACTO.critic_model.load_weights(self.NNs_path+"/critic_{}.h5".format(self.update_step_counter))
-            CACTO.target_critic.load_weights(self.NNs_path+"/target_critic_{}.h5".format(self.update_step_counter))
+        if self.conf.recover_stopped_training: 
+            CACTO.actor_model.load_weights(self.conf.NNs_path+"/actor_{}.h5".format(self.conf.update_step_counter))
+            CACTO.critic_model.load_weights(self.conf.NNs_path+"/critic_{}.h5".format(self.conf.update_step_counter))
+            CACTO.target_critic.load_weights(self.conf.NNs_path+"/target_critic_{}.h5".format(self.conf.update_step_counter))
         else:
             CACTO.target_critic.set_weights(CACTO.critic_model.get_weights())   
