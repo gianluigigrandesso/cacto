@@ -3,7 +3,7 @@ import tensorflow as tf
 from tensorflow.keras import layers, regularizers
 from pyomo.environ import *
 from pyomo.dae import *
-from inits import init_tau0,init_tau1,init_tau2,init_q0,init_q1,init_q2,init_v0,init_v1,init_v2,init_q0_ICS,init_q1_ICS,init_q2_ICS,init_v0_ICS,init_v1_ICS,init_v2_ICS,init_0
+from inits import init_tau, init_x, init_x_ICS, init_0
 from CACTO import CACTO
 import numpy as np
 import random
@@ -11,19 +11,17 @@ import math
 
        
 class TO_Pyomo(CACTO):
-    def __init__(self, env, conf, system):
+    def __init__(self, env, conf, system_id):
         super(TO_Pyomo, self).__init__(env, conf, init_setup_model=False)
 
+        self.NSTEPS = conf.NSTEPS
+        self.EPISODE_ICS_INIT = conf.EPISODE_ICS_INIT        
         self.soft_max_param = conf.soft_max_param
         self.obs_param = conf.obs_param
         self.weight = conf.weight
         self.target = conf.TARGET_STATE
-        self.NSTEPS = conf.NSTEPS
-        self.EPISODE_ICS_INIT = conf.EPISODE_ICS_INIT
-        self.LR_SCHEDULE = conf.LR_SCHEDULE
-        self.state_norm_arr = conf.state_norm_arr
 
-        self.system = system
+        self.system_id = system_id
 
         return
 
@@ -36,25 +34,25 @@ class TO_Pyomo(CACTO):
         if init_TO != None:
             init_TO_controls = init_TO[0]
             init_TO_states = init_TO[1]      
-            m.tau0 = Var(m.k, initialize=init_tau0(m,m.k,init_TO_controls), bounds=(-self.tau_upper_bound, self.tau_upper_bound)) 
-            m.tau1 = Var(m.k, initialize=init_tau1(m,m.k,init_TO_controls), bounds=(-self.tau_upper_bound, self.tau_upper_bound)) 
-            m.tau2 = Var(m.k, initialize=init_tau2(m,m.k,init_TO_controls), bounds=(-self.tau_upper_bound, self.tau_upper_bound)) 
-            m.q0 = Var(m.k, initialize=init_q0(m,m.k,init_TO_states))
-            m.q1 = Var(m.k, initialize=init_q1(m,m.k,init_TO_states))
-            m.q2 = Var(m.k, initialize=init_q2(m,m.k,init_TO_states))
-            m.v0 = Var(m.k, initialize=init_v0(m,m.k,init_TO_states))
-            m.v1 = Var(m.k, initialize=init_v1(m,m.k,init_TO_states))
-            m.v2 = Var(m.k, initialize=init_v2(m,m.k,init_TO_states))
+            m.tau0 = Var(m.k, initialize=init_tau0(m,m.k,0,init_TO_controls), bounds=(self.u_min[0], self.u_max[0])) 
+            m.tau1 = Var(m.k, initialize=init_tau1(m,m.k,1,init_TO_controls), bounds=(self.u_min[1], self.u_max[1])) 
+            m.tau2 = Var(m.k, initialize=init_tau2(m,m.k,2,init_TO_controls), bounds=(self.u_min[2], self.u_max[2])) 
+            m.q0 = Var(m.k, initialize=init_q0(m,m.k,0,init_TO_states))
+            m.q1 = Var(m.k, initialize=init_q1(m,m.k,1,init_TO_states))
+            m.q2 = Var(m.k, initialize=init_q2(m,m.k,2,init_TO_states))
+            m.v0 = Var(m.k, initialize=init_v0(m,m.k,3,init_TO_states))
+            m.v1 = Var(m.k, initialize=init_v1(m,m.k,4,init_TO_states))
+            m.v2 = Var(m.k, initialize=init_v2(m,m.k,5,init_TO_states))
         else:    
-            m.tau0 = Var(m.k, initialize=init_tau0(m,m.k), bounds=(-self.tau_upper_bound, self.tau_upper_bound)) 
-            m.tau1 = Var(m.k, initialize=init_tau1(m,m.k), bounds=(-self.tau_upper_bound, self.tau_upper_bound)) 
-            m.tau2 = Var(m.k, initialize=init_tau2(m,m.k), bounds=(-self.tau_upper_bound, self.tau_upper_bound)) 
-            m.q0 = Var(m.k, initialize=init_q0(m,m.k,ICS))
-            m.q1 = Var(m.k, initialize=init_q1(m,m.k,ICS))
-            m.q2 = Var(m.k, initialize=init_q2(m,m.k,ICS))
-            m.v0 = Var(m.k, initialize=init_v0(m,m.k,ICS))
-            m.v1 = Var(m.k, initialize=init_v1(m,m.k,ICS))
-            m.v2 = Var(m.k, initialize=init_v2(m,m.k,ICS))
+            m.tau0 = Var(m.k, initialize=init_tau0(m,m.k,0), bounds=(self.u_min[0], self.u_max[0]))
+            m.tau1 = Var(m.k, initialize=init_tau1(m,m.k,1), bounds=(self.u_min[1], self.u_max[1])) 
+            m.tau2 = Var(m.k, initialize=init_tau2(m,m.k,2), bounds=(self.u_min[2], self.u_max[2]))
+            m.q0 = Var(m.k, initialize=init_q0(m,m.k,0,ICS))
+            m.q1 = Var(m.k, initialize=init_q1(m,m.k,1,ICS))
+            m.q2 = Var(m.k, initialize=init_q2(m,m.k,2,ICS))
+            m.v0 = Var(m.k, initialize=init_v0(m,m.k,3,ICS))
+            m.v1 = Var(m.k, initialize=init_v1(m,m.k,4,ICS))
+            m.v2 = Var(m.k, initialize=init_v2(m,m.k,5,ICS))
         
         m.a0 = Var(m.k, initialize=init_a0)
         m.a1 = Var(m.k, initialize=init_a1)
@@ -150,13 +148,13 @@ class TO_Pyomo(CACTO):
     def TO_Manipulator_Solve(self, ep, prev_state, init_TO_controls, init_TO_states):
         # Create TO problem                   
         if ep < self.EPISODE_CRITIC_PRETRAINING or ep < self.EPISODE_ICS_INIT:
-            TO_mdl = self.TO_DoubleInterator_Model(prev_state, init_q0_ICS, init_q1_ICS, init_v0_ICS, init_v1_ICS, init_0, init_0, init_0, init_0, CACTO.NSTEPS_SH)
+            TO_mdl = self.TO_Manipulator_Model(prev_state, init_x_ICS, init_x_ICS, init_x_ICS, init_x_ICS, init_0, init_0, init_0, init_0, CACTO.NSTEPS_SH)
         else:
             if ep == self.EPISODE_ICS_INIT and self.LR_SCHEDULE:  
                 # Re-initialize Adam otherwise it keeps being affected by the estimates of first-order and second-order moments computed previously with ICS warm-starting
                 CACTO.critic_optimizer = tf.keras.optimizers.Adam(CACTO.CRITIC_LR_SCHEDULE)     
                 CACTO.actor_optimizer = tf.keras.optimizers.Adam(CACTO.ACTOR_LR_SCHEDULE)
-            TO_mdl = self.TO_Manipulator_Model(prev_state, init_q0, init_q1, init_q2, init_v0, init_v1, init_v2, init_0, init_0, init_0, init_tau0, init_tau1, init_tau2, CACTO.NSTEPS_SH, init_TO = [init_TO_controls, init_TO_states])
+            TO_mdl = self.TO_Manipulator_Model(prev_state, init_x, init_x, init_x, init_x, init_x, init_x, init_0, init_0, init_0, init_tau, init_tau, init_tau, CACTO.NSTEPS_SH, init_TO = [init_TO_controls, init_TO_states])
             
         # Indexes of TO variables       
         K = np.array([k for k in TO_mdl.k]) 
@@ -205,19 +203,19 @@ class TO_Pyomo(CACTO):
         if init_TO != None:
             init_TO_controls = init_TO[0]
             init_TO_states = init_TO[1]     
-            m.tau0 = Var(m.k, initialize=init_tau0(m,m.k,init_TO_controls), bounds=(-self.tau_upper_bound, self.tau_upper_bound)) 
-            m.tau1 = Var(m.k, initialize=init_tau1(m,m.k,init_TO_controls), bounds=(-self.tau_upper_bound, self.tau_upper_bound)) 
-            m.q0 = Var(m.k, initialize=init_q0(m,m.k,init_TO_states))
-            m.q1 = Var(m.k, initialize=init_q1(m,m.k,init_TO_states))
-            m.v0 = Var(m.k, initialize=init_v0(m,m.k,init_TO_states))
-            m.v1 = Var(m.k, initialize=init_v1(m,m.k,init_TO_states))
+            m.tau0 = Var(m.k, initialize=init_tau0(m,m.k,0,init_TO_controls), bounds=(self.u_min[0], self.u_max[0])) 
+            m.tau1 = Var(m.k, initialize=init_tau1(m,m.k,1,init_TO_controls), bounds=(self.u_min[1], self.u_max[1])) 
+            m.q0 = Var(m.k, initialize=init_q0(m,m.k,0,init_TO_states))
+            m.q1 = Var(m.k, initialize=init_q1(m,m.k,1,init_TO_states))
+            m.v0 = Var(m.k, initialize=init_v0(m,m.k,2,init_TO_states))
+            m.v1 = Var(m.k, initialize=init_v1(m,m.k,3,init_TO_states))
         else:    
-            m.tau0 = Var(m.k, initialize=init_tau0(m,m.k), bounds=(-self.tau_upper_bound, self.tau_upper_bound)) 
-            m.tau1 = Var(m.k, initialize=init_tau1(m,m.k), bounds=(-self.tau_upper_bound, self.tau_upper_bound)) 
-            m.q0 = Var(m.k, initialize=init_q0(m,m.k,ICS))
-            m.q1 = Var(m.k, initialize=init_q1(m,m.k,ICS))
-            m.v0 = Var(m.k, initialize=init_v0(m,m.k,ICS))
-            m.v1 = Var(m.k, initialize=init_v1(m,m.k,ICS))
+            m.tau0 = Var(m.k, initialize=init_tau0(m,m.k,0), bounds=(self.u_min[0], self.u_max[0])) 
+            m.tau1 = Var(m.k, initialize=init_tau1(m,m.k,1), bounds=(self.u_min[1], self.u_max[1])) 
+            m.q0 = Var(m.k, initialize=init_q0(m,m.k,0,ICS))
+            m.q1 = Var(m.k, initialize=init_q1(m,m.k,1,ICS))
+            m.v0 = Var(m.k, initialize=init_v0(m,m.k,2,ICS))
+            m.v1 = Var(m.k, initialize=init_v1(m,m.k,3,ICS))
         
         m.a0 = Var(m.k, initialize=init_a0)
         m.a1 = Var(m.k, initialize=init_a1)
@@ -283,13 +281,13 @@ class TO_Pyomo(CACTO):
     def TO_DoubleIntegrator_Solve(self, ep, prev_state, init_TO_controls, init_TO_states):
         # Create TO problem               
         if ep < self.EPISODE_CRITIC_PRETRAINING or ep < self.EPISODE_ICS_INIT:
-            TO_mdl = self.TO_DoubleInterator_Model(prev_state, init_q0_ICS, init_q1_ICS, init_v0_ICS, init_v1_ICS, init_0, init_0, init_0, init_0, CACTO.NSTEPS_SH)
+            TO_mdl = self.TO_DoubleIntegrator_Model(prev_state, init_x_ICS, init_x_ICS, init_x_ICS, init_x_ICS, init_0, init_0, init_0, init_0, CACTO.NSTEPS_SH)
         else:
             if ep == self.EPISODE_ICS_INIT and self.LR_SCHEDULE:  
                 # Re-initialize Adam otherwise it keeps being affected by the estimates of first-order and second-order moments computed previously with ICS warm-starting
                 CACTO.critic_optimizer = tf.keras.optimizers.Adam(CACTO.CRITIC_LR_SCHEDULE)     
                 CACTO.actor_optimizer = tf.keras.optimizers.Adam(CACTO.ACTOR_LR_SCHEDULE)
-            TO_mdl = self.TO_DoubleIntegrator_Model(prev_state, init_q0, init_q1, init_v0, init_v1, init_0, init_0, init_tau0, init_tau1, CACTO.NSTEPS_SH, init_TO = [init_TO_controls, init_TO_states])
+            TO_mdl = self.TO_DoubleIntegrator_Model(prev_state, init_x, init_x, init_x, init_x, init_0, init_0, init_tau, init_tau, CACTO.NSTEPS_SH, init_TO = [init_TO_controls, init_TO_states])
             
         # Indexes of TO variables       
         K = np.array([k for k in TO_mdl.k]) 
@@ -335,12 +333,12 @@ class TO_Pyomo(CACTO):
         while TO==0:
             
             # Randomize initial state 
-            if self.system == 'double_integrator':
+            if self.system_id == 'double_integrator':
                 rand_time = random.uniform(0,(self.NSTEPS-1)*self.dt)
                 prev_state = np.array([random.uniform(-15,15), random.uniform(-15,15),
                                        random.uniform(-6,6), random.uniform(-6,6),
                                        self.dt*round(rand_time/self.dt)])
-            elif self.system == 'manipulator':
+            elif self.system_id == 'manipulator':
                 rand_time = random.uniform(0,(self.NSTEPS-1)*self.dt)
                 prev_state = np.array([random.uniform(-math.pi,math.pi), random.uniform(-math.pi,math.pi), random.uniform(-math.pi,math.pi), 
                                        random.uniform(-math.pi/4,math.pi/4), random.uniform(-math.pi/4,math.pi/4), random.uniform(-math.pi/4,math.pi/4),
@@ -395,12 +393,12 @@ class TO_Pyomo(CACTO):
                 init_prev_state = np.copy(init_next_state)
 
             # sys_dep #
-            if self.system == 'double_integrator':
+            if self.system_id == 'double_integrator':
                 TO, tau_TO = self.TO_DoubleIntegrator_Solve(ep, prev_state, init_TO_controls, init_TO_states) 
-            elif self.system == 'manipulator':
+            elif self.system_id == 'manipulator':
                 TO, tau_TO = self.TO_Manipulator_Solve(ep, prev_state, init_TO_controls, init_TO_states)
             else:
-                print('Pyomo system model not found')
+                print('Pyomo {} model not found'.format(self.system_id))
 
             # Plot TO solution    
             # plot_results_TO(TO_mdl)   

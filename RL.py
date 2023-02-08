@@ -16,7 +16,6 @@ class RL_AC(CACTO):
         self.nsteps_TD_N = conf.nsteps_TD_N
         self.prioritized_replay_eps = conf.prioritized_replay_eps
         self.prioritized_replay_alpha = conf.prioritized_replay_alpha
-        self.state_norm_arr = conf.state_norm_arr
         self.UPDATE_LOOPS = conf.UPDATE_LOOPS
         self.UPDATE_RATE = conf.UPDATE_RATE
         self.SOBOLEV = conf.SOBOLEV
@@ -73,9 +72,6 @@ class RL_AC(CACTO):
                     critic_loss = tf.math.reduce_mean(tf.math.square(tf.math.multiply(weights_batch,(y - critic_value))))   
         
         CACTO.critic_loss_tot.append(np.array(critic_loss))
-
-        #with open(self.conf.Log_path + 'Value_loss', 'a') as file:
-        #    file.write(str(np.array(critic_loss)) + '\n')
 
         # Compute the gradients of the critic loss w.r.t. critic's parameters
         critic_grad = tape.gradient(critic_loss, CACTO.critic_model.trainable_variables)   
@@ -267,7 +263,7 @@ class RL_AC(CACTO):
  
         # Buond actions in case they are not already bounded in the TO problem
         if step < CACTO.NSTEPS_SH:
-            next_actions = np.clip(action_TO[step+1,:], self.tau_lower_bound, self.tau_upper_bound)
+            next_actions = np.clip(action_TO[step+1,:], self.u_min, self.u_max)
         else:
             next_actions = np.copy(actions) # Actions at last step of the episode are not performed 
 

@@ -21,22 +21,25 @@ def run(**kwargs):
     time_start = time.time()
 
     ### Select system and TO method ###
-    system    = kwargs['system'] #'double_integrator'
-    TO_method = kwargs['TO_method']#'pyomo'
-    seed      = 123
+    system_id    = kwargs['system_id'] 
+    TO_method = kwargs['TO_method']
+    if kwargs['seed'] == None:
+        seed = random.randint(1,100000)
+    else:
+        seed = kwargs['seed']
     ##################################
 
 
-    if system == 'manipulator':
+    if system_id == 'manipulator':
         import manipulator_conf as conf
         from environment import Manipulator as Environment
 
-    elif system == 'double_integrator':
+    elif system_id == 'double_integrator':
         import double_integrator_conf as conf
         from environment import DoubleIntegrator as Environment
 
     else:
-        print('System: ' + system + ' not found')
+        print('System {} not found'.format(system_id))
 
 
     # os.environ["CUDA_VISIBLE_DEVICES"]="-1"     # Uncomment to run TF on CPU rather than GPU                         
@@ -79,7 +82,8 @@ def run(**kwargs):
             "\nRandom initial state -> [uniform(-pi,pi), uniform(-pi,pi), uniform(-pi,pi), uniform(-pi/4,pi/4), uniform(-pi/4,pi/4), uniform(-pi/4,pi/4),uniform(0,(NSTEPS_SH-1)*conf.dt)"+ 
             "\nNormalized inputs = {}, q by {} and qdot by {}".format(conf.NORMALIZE_INPUTS,conf.state_norm_arr[0],conf.state_norm_arr[3])+
             "\nEpisodes of critic pretraining = {}".format(conf.EPISODE_CRITIC_PRETRAINING)+
-            "\nn-step TD = {} with {} lookahead steps".format(conf.TD_N, conf.nsteps_TD_N))
+            "\nn-step TD = {} with {} lookahead steps".format(conf.TD_N, conf.nsteps_TD_N) + 
+            "\nSeed = {}".format(seed))
     f.close()
 
     # Set seed
@@ -92,13 +96,13 @@ def run(**kwargs):
 
     # Create CACTO instance
     cacto_instance = CACTO(env, conf)
-    cacto_instance.setup_model() # sys_dep: ACTOR and CRITIC NNs#
+    cacto_instance.setup_model()
 
     # Select TO method and create TO instance
     if TO_method == 'pyomo':
-        TrOp = TO_Pyomo(env, conf, system)
+        TrOp = TO_Pyomo(env, conf, system_id)
     elif TO_method == 'casadi':
-        TrOp = TO_Casadi(env, conf, system)
+        TrOp = TO_Casadi(env, conf, system_id)
     else:
         print('TO method: ' + TO_method + ' not implemented')
         sys.exit()
@@ -123,7 +127,7 @@ def run(**kwargs):
     avg_reward_list = []
 
     plt.ion()
-    fig = plt.figure(system)
+    fig = plt.figure(system_id)
 
     ### START TRAINING ###
     for ep in range(nb_starting_episode,conf.NEPISODES): 
@@ -149,10 +153,6 @@ def run(**kwargs):
         # avg_reward = np.mean(ep_reward_list[-40:])  # Mean of last 40 episodes
         # avg_reward_list.append(avg_reward)
 
-        #plt.clf()
-        #plt.plot(CACTO.critic_loss_tot, 'r-', label='Reward')
-        #plt.savefig(conf.Log_path + "Loss value.png")
-
         print("Episode  {}  --->   Return = {}".format(ep, ep_return))
 
     time_end = time.time()
@@ -163,9 +163,9 @@ def run(**kwargs):
     # plot_fun.plot_Return(ep_reward_list)
 
     # Save networks at the end of the training
-    CACTO.actor_model.save_weights(conf.NNs_path+"/"+system+"_actor_final.h5")
-    CACTO.critic_model.save_weights(conf.NNs_path+"/"+system+"_critic_final.h5")
-    CACTO.target_critic.save_weights(conf.NNs_path+"/"+system+"_target_critic_final.h5")
+    CACTO.actor_model.save_weights(conf.NNs_path+"/actor_final.h5")
+    CACTO.critic_model.save_weights(conf.NNs_path+"/critic_final.h5")
+    CACTO.target_critic.save_weights(conf.NNs_path+"/target_critic_final.h5")
 
     # Simulate the final policy
     #tau_all_final_sim, x_ee_all_final_sim, y_ee_all_final_sim = rollout(update_step_counter)
@@ -178,8 +178,9 @@ def parse_args():
     """
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument('--system',                         type=str,   default='-')
+    parser.add_argument('--system-id',                      type=str,   default='-')
     parser.add_argument('--TO-method',                      type=str,   default='pyomo')
+    parser.add_argument('--seed',                           type=int,   default=None)
     args = parser.parse_args()
     dict_args = vars(args)
     return dict_args
@@ -215,92 +216,46 @@ if __name__ == '__main__':
 
 
 
-
-'''
-TO-method,
-system,
-
-NORMALIZE-INPUTS, 
-EPISODE-CRITIC-PRETRAINING, 
-nsteps-TD-N,
-NSTEPS,
-EPISODE-ICS-INIT, 
-TD-N, 
-prioritized-replay-eps, 
-prioritized-replay-alpha,
-UPDATE-LOOPS, 
-UPDATE-RATE, 
-LR-SCHEDULE, 
-update-step-counter, 
-NH1, 
-NH2, 
-wreg-l1-A, 
-wreg-l2-A, 
-wreg-l1-C, 
-wreg-l2-C, 
-boundaries-schedule-LR-C, 
-values-schedule-LR-C,
-boundaries-schedule-LR-A, 
-values-schedule-LR-A, 
-CRITIC-LEARNING-RATE, 
-ACTOR-LEARNING-RATE, 
-recover-stopped-training, 
-NNs-path, 
-BATCH-SIZE, 
-
-conf:
-conf.tau-upper-bound, 
-conf.tau-lower-bound, 
-conf.dt, 
-conf.soft-max-param, 
-conf.obs_param,
-conf.weight,
-conf.TARGET-STATE,  
-conf.state-norm_arr, 
-conf.robot,  (conf.nb_state, conf.nb_action)
-'''
-
 '''
 TO_method,
 system,
 
-conf.NORMALIZE_INPUTS, 
-conf.EPISODE_CRITIC_PRETRAINING, 
-conf.nsteps_TD_N,
-conf.NSTEPS,
-conf.EPISODE_ICS_INIT, 
-conf.TD_N, 
-conf.prioritized_replay_eps, 
-conf.prioritized_replay_alpha,
-conf.UPDATE_LOOPS, 
-conf.UPDATE_RATE, 
-conf.LR_SCHEDULE, 
-conf.update_step_counter, 
-conf.NH1, 
-conf.NH2, 
-conf.wreg_l1_A, 
-conf.wreg_l2_A, 
-conf.wreg_l1_C, 
-conf.wreg_l2_C, 
-conf.boundaries_schedule_LR_C, 
-conf.values_schedule_LR_C,
-conf.boundaries_schedule_LR_A, 
-conf.values_schedule_LR_A, 
-conf.CRITIC_LEARNING_RATE, 
-conf.ACTOR_LEARNING_RATE, 
-conf.recover_stopped_training, 
-conf.NNs_path, 
-conf.BATCH_SIZE, 
+NORMALIZE_INPUTS, 
+EPISODE_CRITIC_PRETRAINING, 
+nsteps_TD_N,
+NSTEPS,
+EPISODE_ICS_INIT, 
+TD_N, 
+prioritized_replay_eps, 
+prioritized_replay_alpha,
+UPDATE_LOOPS, 
+UPDATE_RATE, 
+LR_SCHEDULE, 
+update_step_counter, 
+NH1, 
+NH2, 
+wreg_l1_A, 
+wreg_l2_A, 
+wreg_l1_C, 
+wreg_l2_C, 
+boundaries_schedule_LR_C, 
+values_schedule_LR_C,
+boundaries_schedule_LR_A, 
+values_schedule_LR_A, 
+CRITIC_LEARNING_RATE, 
+ACTOR_LEARNING_RATE, 
+recover_stopped_training, 
+NNs_path, 
+BATCH_SIZE, 
 
-conf.tau_upper_bound, 
-conf.tau_lower_bound, 
-conf.dt, system_param,   
-conf.soft_max_param, 
-conf.obs_param,
-conf.weight,
-conf.TARGET_STATE,  
-conf.state_norm_arr, 
-conf.robot,  (conf.nb_state, conf.nb_action)
+u_min, 
+u_max, 
+dt, system_param,   
+soft_max_param, 
+obs_param,
+weight,
+TARGET_STATE,  
+state_norm_arr, 
+robot,  (nb_state, nb_action)
 
-conf
 '''

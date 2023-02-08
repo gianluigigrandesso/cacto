@@ -3,11 +3,6 @@ import math
 from robot_utils import RobotWrapper, RobotSimulator
 import os
 
-''' Useful parameters ''' 
-seed = 123
-
-
-
 ''' CACTO parameters '''
 ep_no_update = 100                                                                                          # Episodes to wait before starting to update the NNs
 NEPISODES = 50000+ep_no_update                                                                              # Max training episodes
@@ -71,7 +66,7 @@ wreg_l2_A = 1e-2                                                                
 wreg_l1_C = 1e-2                                                                                            # Weight of L1 regularization in critic's network
 wreg_l2_C = 1e-2                                                                                            # Weight of L2 regularization in critic's network
 
-SOBOLEV = 0
+SOBOLEV = 0 
 
 # Set TD_N ONLY is SOBOLEV not used
 if SOBOLEV == 1:

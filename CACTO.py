@@ -26,15 +26,12 @@ class CACTO():
     
 
     def __init__(self, env, conf, init_setup_model=True):
-
         self.env = env
         self.conf = conf
 
         self.batch_size = conf.BATCH_SIZE
         self.NORMALIZE_INPUTS = conf.NORMALIZE_INPUTS
         self.EPISODE_CRITIC_PRETRAINING = conf.EPISODE_CRITIC_PRETRAINING
-        self.tau_lower_bound = conf.tau_lower_bound
-        self.tau_upper_bound = conf.tau_upper_bound
         self.dt = conf.dt
         self.LR_SCHEDULE = conf.LR_SCHEDULE
         self.update_step_counter = conf.update_step_counter
@@ -50,11 +47,15 @@ class CACTO():
         self.values_schedule_LR_A = conf.values_schedule_LR_A
         self.CRITIC_LEARNING_RATE = conf.CRITIC_LEARNING_RATE
         self.ACTOR_LEARNING_RATE = conf.ACTOR_LEARNING_RATE
-        self.nb_state = conf.nb_state
-        self.nb_action = conf.nb_action
-        self.robot = conf.robot
         self.recover_stopped_training = conf.recover_stopped_training
         self.NNs_path = conf.NNs_path
+
+        self.robot = conf.robot
+        self.u_min = conf.u_min
+        self.u_max = conf.u_max
+        self.nb_state = conf.nb_state
+        self.nb_action = conf.nb_action
+        self.state_norm_arr = conf.state_norm_arr
 
         return
 
@@ -79,7 +80,7 @@ class CACTO():
 
         outputs = layers.Dense(self.nb_action, activation="tanh", kernel_regularizer=regularizers.l1_l2(self.wreg_l1_A,self.wreg_l2_A),bias_regularizer=regularizers.l1_l2(self.wreg_l1_A,self.wreg_l2_A))(leakyrelu2) 
 
-        outputs = outputs * self.tau_upper_bound          # Bound actions
+        outputs = outputs * self.u_max          # Bound actions
         model = tf.keras.Model(inputs, outputs)
         return model 
 

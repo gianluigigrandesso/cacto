@@ -3,11 +3,6 @@ import math
 from robot_utils import RobotWrapper, RobotSimulator
 import os
 
-''' Useful parameters ''' 
-seed = 123
-
-
-
 ''' CACTO parameters '''
 ep_no_update = 100                                                                                          # Episodes to wait before starting to update the NNs
 NEPISODES = 50000+ep_no_update                                                                              # Max training episodes
