@@ -40,6 +40,7 @@ def run(**kwargs):
 
     else:
         print('System {} not found'.format(system_id))
+        sys.exit()
 
 
     # os.environ["CUDA_VISIBLE_DEVICES"]="-1"     # Uncomment to run TF on CPU rather than GPU                         
@@ -125,9 +126,6 @@ def run(**kwargs):
     # Lists to store the reward history of each episode and the average reward history of last few episodes
     ep_reward_list = []                                                                                     
     avg_reward_list = []
-
-    plt.ion()
-    fig = plt.figure(system_id)
 
     ### START TRAINING ###
     for ep in range(nb_starting_episode,conf.NEPISODES): 

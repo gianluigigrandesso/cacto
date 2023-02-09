@@ -19,29 +19,36 @@ class RL_AC(CACTO):
         with tf.GradientTape() as tape:
             # Update the critic
             if self.conf.SOBOLEV:
-                with tf.GradientTape() as tape3:
-                    tape3.watch(state_batch)
-                    next_state_tf = self.env.simulate_tf(state_batch,action_batch)      
-                    rewards_tf = self.env.reward_tf(next_state_tf, action_batch, self.conf.BATCH_SIZE, d_batch)    # We need also the batch of rewards associated to the batches of next states and actions
-                    target_values = CACTO.target_critic(next_state_tf, training=True)
-                    y = rewards_tf + (1-d_batch)*(target_values)
-                    target_grad = tape3.gradient(y, state_batch)
                 if self.conf.NORMALIZE_INPUTS:
+                    with tf.GradientTape() as tape3:
+                        tape3.watch(state_batch_norm)
+                        x2 = self.env.de_normalize(state_batch_norm, self.conf.BATCH_SIZE)
+                        next_state_tf = self.env.simulate_tf(x2,action_batch)      
+                        rewards_tf = self.env.reward_tf(next_state_tf, action_batch, self.conf.BATCH_SIZE, d_batch)    # We need also the batch of rewards associated to the batches of next states and actions
+                        target_values = CACTO.target_critic(next_state_tf, training=True)
+                        y = rewards_tf + (1-d_batch)*(target_values)
+                        target_grad = tape3.gradient(y, state_batch_norm)
                     with tf.GradientTape() as tape2:
                         tape2.watch(state_batch_norm)
                         critic_value = CACTO.critic_model(state_batch_norm, training=True)                    # Compute batch of Values associated to the sampled batch of states
                         critic_state_grad = tape2.gradient(critic_value, state_batch_norm)
                 else:
+                    with tf.GradientTape() as tape3:
+                        tape3.watch(state_batch)
+                        next_state_tf = self.env.simulate_tf(state_batch,action_batch)      
+                        rewards_tf = self.env.reward_tf(next_state_tf, action_batch, self.conf.BATCH_SIZE, d_batch)    # We need also the batch of rewards associated to the batches of next states and actions
+                        target_values = CACTO.target_critic(next_state_tf, training=True)
+                        y = rewards_tf + (1-d_batch)*(target_values)
+                        target_grad = tape3.gradient(y, state_batch)
                     with tf.GradientTape() as tape2:
                         tape2.watch(state_batch)
                         critic_value = CACTO.critic_model(state_batch, training=True)                         # Compute batch of Values associated to the sampled batch of states
                         critic_state_grad = tape2.gradient(critic_value, state_batch)
-                        
                 der = critic_state_grad-target_grad
                 if weights_batch is None:
-                    critic_loss = tf.math.reduce_mean(tf.math.square(y - critic_value)) + 1e1*tf.math.reduce_mean(tf.square(der))                              # Critic loss function (tf.math.reduce_mean computes the mean of elements across dimensions of a tensor, in this case across the batch)
+                    critic_loss = tf.math.reduce_mean(tf.math.square(y - critic_value)) + self.wd*tf.math.reduce_mean(tf.square(der))                              # Critic loss function (tf.math.reduce_mean computes the mean of elements across dimensions of a tensor, in this case across the batch)
                 else:
-                    critic_loss = tf.math.reduce_mean(tf.math.square(tf.math.multiply(weights_batch,(y - critic_value)))) + 1e1*tf.math.reduce_mean(tf.square(der)) #np.clip(der,0,1e5)      # tf.math.reduce_mean computes the mean of elements across dimensions of a tensor
+                    critic_loss = tf.math.reduce_mean(tf.math.square(tf.math.multiply(weights_batch,(y - critic_value)))) + self.wd*tf.math.reduce_mean(tf.square(der)) #np.clip(der,0,1e5)      # tf.math.reduce_mean computes the mean of elements across dimensions of a tensor
             else:   
                 if self.conf.NORMALIZE_INPUTS:
                     if self.conf.TD_N:  
@@ -57,7 +64,6 @@ class RL_AC(CACTO):
                         target_values = CACTO.target_critic(next_state_batch, training=True)
                         y = reward_batch + (1-d_batch)*target_values   
                     critic_value = CACTO.critic_model(state_batch, training=True)
-
                 if weights_batch is None:
                     critic_loss = tf.math.reduce_mean(tf.math.square(y - critic_value))                         # Critic loss function (tf.math.reduce_mean computes the mean of elements across dimensions of a tensor, in this case across the batch)
                 else:
@@ -157,6 +163,9 @@ class RL_AC(CACTO):
             x2_batch_norm[:,-1] = 2*x2_batch_norm[:,-1] -1
             next_state_batch_norm = tf.convert_to_tensor(x2_batch_norm)
             next_state_batch_norm = tf.cast(next_state_batch_norm, dtype=tf.float32)
+        else:
+            state_batch_norm = None
+            next_state_batch_norm = None
           
         # Update priorities
         if self.conf.prioritized_replay_alpha != 0:

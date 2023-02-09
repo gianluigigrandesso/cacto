@@ -66,7 +66,8 @@ wreg_l2_A = 1e-2                                                                
 wreg_l1_C = 1e-2                                                                                            # Weight of L1 regularization in critic's network
 wreg_l2_C = 1e-2                                                                                            # Weight of L2 regularization in critic's network
 
-SOBOLEV = 0 
+SOBOLEV = 0                                                                                                 # Flag to use Sobolev training
+wd = 5e-1                                                                                                   # Derivative-related loss weight
 
 # Set TD_N ONLY is SOBOLEV not used
 if SOBOLEV == 1:
@@ -130,7 +131,7 @@ Log_path = './Log/DoubleIntegrator/'                                            
 
 
 
-''' System parameters '''                                                                                   # Expressed as percentage of torque max
+''' System parameters '''                                                                                  
 # Robot upload data
 URDF_FILENAME = "double_integrator.urdf" 
 modelPath = os.getcwd()+"/urdf/" + URDF_FILENAME  
@@ -139,7 +140,7 @@ robot = RobotWrapper.BuildFromURDF(modelPath, [modelPath])
 # Dynamics parameters'
 simulate_coulomb_friction = 0                                                                               # To simulate friction
 simulation_type = 'euler'                                                                                   # Either 'timestepping' or 'euler'
-tau_coulomb_max = 0*np.ones(robot.na)       
+tau_coulomb_max = 0*np.ones(robot.na)                                                                       # Expressed as percentage of torque max
 
 q_init, v_init = np.array([-5, 0]), np.zeros(robot.nv)
 simu = RobotSimulator(robot, q_init, v_init, simulation_type, tau_coulomb_max)

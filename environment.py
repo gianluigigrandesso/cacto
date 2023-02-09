@@ -6,6 +6,7 @@ import tensorflow as tf
 import pinocchio as pin
 import manipulator_conf as conf #only for system parameters (M, l, Iz, ...)
 from gym.utils import seeding
+import sys
 
 class Manipulator(gym.Env):
     metadata = {
@@ -140,10 +141,7 @@ class Manipulator(gym.Env):
     
         # De-normalize x2 because it is normalized if self.NORMALIZE_INPUTS=1. (Mask trick needed because TensorFlow's autodifferentiation doesn't work if tensors' elements are directly modified by accessing them)
         if self.NORMALIZE_INPUTS:
-            x2_time = tf.stack([np.zeros(BATCH_SIZE), np.zeros(BATCH_SIZE), np.zeros(BATCH_SIZE), np.zeros(BATCH_SIZE), np.zeros(BATCH_SIZE), np.zeros(BATCH_SIZE), (x2[:,-1]+1)*self.state_norm_arr[-1]/2],1)
-            x2_no_time = x2 * self.state_norm_arr
-            mask = tf.cast(tf.stack([np.ones(BATCH_SIZE), np.ones(BATCH_SIZE), np.ones(BATCH_SIZE), np.ones(BATCH_SIZE), np.ones(BATCH_SIZE), np.ones(BATCH_SIZE), np.zeros(BATCH_SIZE)],1),tf.float32)
-            x2_not_norm = x2_no_time * mask + x2_time * (1 - mask)
+            x2_not_norm = self.de_normalize(x2, BATCH_SIZE)
         else:
             x2_not_norm = x2 
     
@@ -247,7 +245,7 @@ class Manipulator(gym.Env):
                 Fu_sample[nv:, :] = robot.data.Minv
                 Fu_sample *= self.dt
                 if self.NORMALIZE_INPUTS:
-                    Fu_sample *= (1/self.state_norm_arr[3])    
+                    Fu_sample *= (1/self.state_norm_arr[:-1,None]) 
     
                 Fu[sample_indx] = np.vstack((Fu_sample, np.zeros(self.nb_action)))    
 
@@ -282,6 +280,8 @@ class Manipulator(gym.Env):
         return tf.cast(tf.stack([q0_next,q1_next,q2_next,v0_next,v1_next,v2_next,t_next],1),dtype=tf.float32)
     
     def simulate_tf(self,x,u):
+        print('Sobolev training for Manipulator not implemented yet')
+        sys.exit()
         q1_next  = x[:,0] 
         q2_next  = x[:,1] 
         q3_next  = x[:,2] 
@@ -298,6 +298,13 @@ class Manipulator(gym.Env):
             v3_next = v3_next / self.state_norm_arr[5]
             t_next = 2*t_next / self.state_norm_arr[-1] -1         
         return tf.stack([q1_next, q2_next, q3_next, v1_next, v2_next, v3_next, t_next],1)
+
+    def de_normalize(self, x2, BATCH_SIZE):
+        x2_time = tf.stack([np.zeros(BATCH_SIZE), np.zeros(BATCH_SIZE), np.zeros(BATCH_SIZE), np.zeros(BATCH_SIZE), np.zeros(BATCH_SIZE), np.zeros(BATCH_SIZE), (x2[:,-1]+1)*self.state_norm_arr[-1]/2],1)
+        x2_no_time = x2 * self.state_norm_arr
+        mask = tf.cast(tf.stack([np.ones(BATCH_SIZE), np.ones(BATCH_SIZE), np.ones(BATCH_SIZE), np.ones(BATCH_SIZE), np.ones(BATCH_SIZE), np.ones(BATCH_SIZE), np.zeros(BATCH_SIZE)],1),tf.float32)
+        x2_not_norm = x2_no_time * mask + x2_time * (1 - mask)
+        return x2_not_norm
     
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
@@ -440,10 +447,7 @@ class DoubleIntegrator(gym.Env):
     
         # De-normalize x2 because it is normalized if self.NORMALIZE_INPUTS=1. (Mask trick needed because TensorFlow's autodifferentiation doesn't work if tensors' elements are directly modified by accessing them)
         if self.NORMALIZE_INPUTS:
-            x2_time = tf.stack([np.zeros(BATCH_SIZE), np.zeros(BATCH_SIZE), np.zeros(BATCH_SIZE), np.zeros(BATCH_SIZE), (x2[:,-1]+1)*self.state_norm_arr[-1]/2],1)
-            x2_no_time = x2 * self.state_norm_arr
-            mask = tf.cast(tf.stack([np.ones(BATCH_SIZE), np.ones(BATCH_SIZE), np.ones(BATCH_SIZE), np.ones(BATCH_SIZE), np.zeros(BATCH_SIZE)],1),tf.float32)
-            x2_not_norm = x2_no_time * mask + x2_time * (1 - mask)
+            x2_not_norm = self.de_normalize(x2, BATCH_SIZE)
         else:
             x2_not_norm = x2 
     
@@ -546,7 +550,7 @@ class DoubleIntegrator(gym.Env):
                 Fu_sample[nv:, :] = robot.data.Minv
                 Fu_sample *= self.dt
                 if self.NORMALIZE_INPUTS:
-                    Fu_sample *= (1/self.state_norm_arr[3])    
+                    Fu_sample *= (1/self.state_norm_arr[:-1,None]) 
 
                 Fu[sample_indx] = np.vstack((Fu_sample, np.zeros(self.nb_action)))    
 
@@ -589,6 +593,13 @@ class DoubleIntegrator(gym.Env):
             vy_next = vy_next / self.state_norm_arr[3]
             t_next = 2*t_next / self.state_norm_arr[-1] -1         
         return tf.stack([x_next, y_next, vx_next, vy_next, t_next],1)
+
+    def de_normalize(self, x2, BATCH_SIZE):
+        x2_time = tf.stack([np.zeros(BATCH_SIZE), np.zeros(BATCH_SIZE), np.zeros(BATCH_SIZE), np.zeros(BATCH_SIZE), (x2[:,-1]+1)*self.state_norm_arr[-1]/2],1)
+        x2_no_time = x2 * self.state_norm_arr
+        mask = tf.cast(tf.stack([np.ones(BATCH_SIZE), np.ones(BATCH_SIZE), np.ones(BATCH_SIZE), np.ones(BATCH_SIZE), np.zeros(BATCH_SIZE)],1),tf.float32)
+        x2_not_norm = x2_no_time * mask + x2_time * (1 - mask)
+        return x2_not_norm
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)

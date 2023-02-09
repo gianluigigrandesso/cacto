@@ -17,6 +17,7 @@ class CACTO():
     :param prioritized_replay_alpha:    (float) Determines how much prioritization is used, set to 0 to use a normal buffer
     :param UPDATE_LOOPS:                (int) Number of updates of both critic and actor performed every EP_UPDATE episodes 
     :param SOBOLEV:                     (bool) Flag to use Sobolev training
+    :param wd:                          (float) Derivative-related loss weight
     :param NSTEPS:                      (int) Max episode length
     :param EPISODE_ICS_INIT:            (int) Episodes where ICS warm-starting is used instead of actor rollout
 
@@ -101,8 +102,8 @@ class CACTO():
         leakyrelu2 = layers.LeakyReLU()(lay2)
 
         outputs = layers.Dense(self.conf.nb_action, activation="tanh", kernel_regularizer=regularizers.l1_l2(self.conf.wreg_l1_A,self.conf.wreg_l2_A),bias_regularizer=regularizers.l1_l2(self.conf.wreg_l1_A,self.conf.wreg_l2_A))(leakyrelu2) 
-
         outputs = outputs * self.conf.u_max          # Bound actions
+
         model = tf.keras.Model(inputs, outputs)
         return model 
 
@@ -110,6 +111,7 @@ class CACTO():
     def get_critic(self): 
 
         state_input = layers.Input(shape=(self.conf.nb_state,))
+
         state_out1 = layers.Dense(16, kernel_regularizer=regularizers.l1_l2(self.conf.wreg_l1_C,self.conf.wreg_l2_C),bias_regularizer=regularizers.l1_l2(self.conf.wreg_l1_C,self.conf.wreg_l2_C))(state_input) 
         leakyrelu1 = layers.LeakyReLU()(state_out1)
 
@@ -125,7 +127,6 @@ class CACTO():
         outputs = layers.Dense(1, kernel_regularizer=regularizers.l1_l2(self.conf.wreg_l1_C,self.conf.wreg_l2_C),bias_regularizer=regularizers.l1_l2(self.conf.wreg_l1_C,self.conf.wreg_l2_C))(leakyrelu4)
 
         model = tf.keras.Model([state_input], outputs)
-
         return model    
     
     # Setup RL model #
