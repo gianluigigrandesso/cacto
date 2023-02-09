@@ -15,7 +15,7 @@ class RL_AC(CACTO):
         return
 
     # Update both critic and actor                                                                     
-    def update(self, episode, red_state_batch_norm, red_state_batch, state_batch_norm, state_batch, reward_batch, next_state_batch, next_state_batch_norm, d_batch, action_batch, weights_batch=None):
+    def update(self, episode, red_state_batch_norm, red_state_batch, state_batch_norm, state_batch, reward_batch, next_state_batch, next_state_batch_norm, d_batch, action_batch, i,weights_batch=None):
         with tf.GradientTape() as tape:
             # Update the critic
             if self.conf.SOBOLEV:
@@ -46,9 +46,9 @@ class RL_AC(CACTO):
                         critic_state_grad = tape2.gradient(critic_value, state_batch)
                 der = critic_state_grad-target_grad
                 if weights_batch is None:
-                    critic_loss = tf.math.reduce_mean(tf.math.square(y - critic_value)) + self.wd*tf.math.reduce_mean(tf.square(der))                              # Critic loss function (tf.math.reduce_mean computes the mean of elements across dimensions of a tensor, in this case across the batch)
+                    critic_loss = tf.math.reduce_mean(tf.math.square(y - critic_value)) + self.conf.wd*tf.math.reduce_mean(tf.square(der))                              # Critic loss function (tf.math.reduce_mean computes the mean of elements across dimensions of a tensor, in this case across the batch)
                 else:
-                    critic_loss = tf.math.reduce_mean(tf.math.square(tf.math.multiply(weights_batch,(y - critic_value)))) + self.wd*tf.math.reduce_mean(tf.square(der)) #np.clip(der,0,1e5)      # tf.math.reduce_mean computes the mean of elements across dimensions of a tensor
+                    critic_loss = tf.math.reduce_mean(tf.math.square(tf.math.multiply(weights_batch,(y - critic_value)))) + self.conf.wd*tf.math.reduce_mean(tf.square(der)) #np.clip(der,0,1e5)      # tf.math.reduce_mean computes the mean of elements across dimensions of a tensor
             else:   
                 if self.conf.NORMALIZE_INPUTS:
                     if self.conf.TD_N:  
@@ -68,6 +68,14 @@ class RL_AC(CACTO):
                     critic_loss = tf.math.reduce_mean(tf.math.square(y - critic_value))                         # Critic loss function (tf.math.reduce_mean computes the mean of elements across dimensions of a tensor, in this case across the batch)
                 else:
                     critic_loss = tf.math.reduce_mean(tf.math.square(tf.math.multiply(weights_batch,(y - critic_value))))   
+        if episode % 1000 == 0 or episode == (self.conf.NEPISODES-1):
+            if self.conf.SOBOLEV:
+                if weights_batch is None:
+                    CACTO.loss_tot.update({episode*100+i:tf.math.reduce_mean(tf.math.square(y - critic_value))})
+                else:
+                    CACTO.loss_tot.update({episode*100+i:tf.math.reduce_mean(tf.math.square(tf.math.multiply(weights_batch,(y - critic_value))))})
+            else:
+                CACTO.loss_tot.update({episode*100+i:critic_loss})
         
         # Compute the gradients of the critic loss w.r.t. critic's parameters
         critic_grad = tape.gradient(critic_loss, CACTO.critic_model.trainable_variables)   
@@ -123,7 +131,7 @@ class RL_AC(CACTO):
         for (a, b) in zip(target_weights, weights):
             a.assign(b * tau + a * (1 - tau))  
 
-    def learn(self, episode, prioritized_buffer):
+    def learn(self, episode, prioritized_buffer,i):
         # Sample batch of transitions from the buffer
         experience = prioritized_buffer.sample(self.conf.BATCH_SIZE, beta=self.conf.prioritized_replay_eps)            # Bias annealing not performed, that's why beta is equal to a very small number (0 not accepted by PrioritizedReplayBuffer)
         x_batch, a_next_batch, a_batch, r_batch, x2_batch, d_batch, weights, batch_idxes = experience        # Importance sampling weights (actually not used) should anneal the bias (see Prioritized Experience Replay paper) 
@@ -183,7 +191,7 @@ class RL_AC(CACTO):
             prioritized_buffer.update_priorities(batch_idxes, new_priorities)   
 
         # Update NNs
-        self.update(episode, state_batch_norm, state_batch, state_batch_norm, state_batch, reward_batch, next_state_batch, next_state_batch_norm, d_batch, action_batch, weights_batch=weights_batch)
+        self.update(episode, state_batch_norm, state_batch, state_batch_norm, state_batch, reward_batch, next_state_batch, next_state_batch_norm, d_batch, action_batch,i, weights_batch=weights_batch)
 
     def RL_Solve(self, prev_state, ep, rand_time, env, tau_TO, prioritized_buffer):
         DONE = 0                              # Flag indicating if the episode has terminated
@@ -250,7 +258,7 @@ class RL_AC(CACTO):
         
         # Update the NNs
         for i in range(self.conf.UPDATE_LOOPS):
-            self.learn(ep, prioritized_buffer)                                                       # Update critic and actor
+            self.learn(ep, prioritized_buffer,i)                                                       # Update critic and actor
             self.update_target(CACTO.target_critic.variables, CACTO.critic_model.variables, self.conf.UPDATE_RATE)    # Update target critic
             self.conf.update_step_counter += 1
         return self.conf.update_step_counter, ep_return

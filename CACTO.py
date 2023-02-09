@@ -66,6 +66,8 @@ class CACTO():
     state_arr = None
     x_ee_arr = []
     y_ee_arr = []
+
+    loss_tot = {}
     
     actor_model = None
     critic_model = None
@@ -144,8 +146,8 @@ class CACTO():
             CACTO.critic_optimizer   = tf.keras.optimizers.Adam(CACTO.CRITIC_LR_SCHEDULE)
             CACTO.actor_optimizer    = tf.keras.optimizers.Adam(CACTO.ACTOR_LR_SCHEDULE)
         else:
-            CACTO.critic_optimizer   = tf.keras.optimizers.Adam(CACTO.CRITIC_LEARNING_RATE)
-            CACTO.actor_optimizer    = tf.keras.optimizers.Adam(CACTO.ACTOR_LEARNING_RATE)
+            CACTO.critic_optimizer   = tf.keras.optimizers.Adam(self.conf.CRITIC_LEARNING_RATE)
+            CACTO.actor_optimizer    = tf.keras.optimizers.Adam(self.conf.ACTOR_LEARNING_RATE)
 
         # Set initial weights of the NNs
         if self.conf.recover_stopped_training: 

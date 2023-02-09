@@ -4,24 +4,24 @@ from robot_utils import RobotWrapper, RobotSimulator
 import os
 
 ''' CACTO parameters '''
-ep_no_update = 100                                                                                          # Episodes to wait before starting to update the NNs
+ep_no_update = 0                                                                                            # Episodes to wait before starting to update the NNs
 NEPISODES = 50000+ep_no_update                                                                              # Max training episodes
 EP_UPDATE = 25                                                                                              # Number of episodes before updating critic and actor
-NSTEPS = 100                                                                                                # Max episode length
-CRITIC_LEARNING_RATE = 0.001                                                                                # Learning rate for the critic network
+NSTEPS = 200                                                                                                # Max episode length
+CRITIC_LEARNING_RATE = 0.005                                                                                # Learning rate for the critic network
 ACTOR_LEARNING_RATE = 0.0005                                                                                # Learning rate for the policy network
 UPDATE_RATE = 0.0005                                                                                        # Homotopy rate to update the target critic network
-UPDATE_LOOPS = 160                                                                                          # Number of updates of both critic and actor performed every EP_UPDATE episodes  
+UPDATE_LOOPS = 80                                                                                          # Number of updates of both critic and actor performed every EP_UPDATE episodes  
 REPLAY_SIZE = 2**15                                                                                         # Size of the replay buffer
-BATCH_SIZE = 64                                                                                             # Size of the mini-batch 
+BATCH_SIZE = 128                                                                                             # Size of the mini-batch 
 
 log_rollout_interval = 10                                                                                   # plot.rollout() interval
-log_interval = 50                                                                                           # Log interval
+log_interval = 1000                                                                                           # Log interval
 
 NH1 = 256                                                                                                   # 1st hidden layer size
 NH2 = 256                                                                                                   # 2nd hidden layer size  
 
-LR_SCHEDULE = 1                                                                                             # Flag to use a scheduler for the learning rates
+LR_SCHEDULE = 0                                                                                             # Flag to use a scheduler for the learning rates
 boundaries_schedule_LR_C = [200*REPLAY_SIZE/BATCH_SIZE, 
                             300*REPLAY_SIZE/BATCH_SIZE,
                             400*REPLAY_SIZE/BATCH_SIZE,
@@ -66,8 +66,8 @@ wreg_l2_A = 1e-2                                                                
 wreg_l1_C = 1e-2                                                                                            # Weight of L1 regularization in critic's network
 wreg_l2_C = 1e-2                                                                                            # Weight of L2 regularization in critic's network
 
-SOBOLEV = 0                                                                                                 # Flag to use Sobolev training
-wd = 5e-1                                                                                                   # Derivative-related loss weight
+SOBOLEV = 1                                                                                                 # Flag to use Sobolev training
+wd = 0.1                                                                                                      # Derivative-related loss weight
 
 # Set TD_N ONLY is SOBOLEV not used
 if SOBOLEV == 1:
@@ -154,7 +154,7 @@ x_min = np.array([-np.inf, -np.inf, -np.inf, -np.inf, 0])                       
 x_init_min = np.array([-15, -15, -6, -6, 0])                                                                # State lower bound vector
 x_max = np.array([np.inf, np.inf, np.inf, np.inf, np.inf])                                                  # State lower bound initial configuration vector
 x_init_max = np.array([ 15,  15,  6,  6, (NSTEPS-1)*dt])                                                    # State upper bound vector
-nb_state = 2 + 2 + 1                                                                                        # State upper bound initial configuration vector
+nb_state = robot.nq + robot.nv + 1                                                                                        # State upper bound initial configuration vector
 state_norm_arr = np.array([15, 15, 6, 6, int(NSTEPS*dt)])                                                   # Array used to normalize states
 
 # initial configurations for plot.rollout()
@@ -169,7 +169,7 @@ init_states_sim = [np.array([2.0,0.0,0.0,0.0,0.0]),
                    np.array([15.0,0.0,0.0,0.0,0.0])]
 
 # Action parameters
-nb_action = 2                                                                                               # Action size
+nb_action = robot.na                                                                                               # Action size
 tau_lower_bound = -2                                                                                        # Action lower bound
 tau_upper_bound = 2                                                                                         # Action upper bound
 u_min = tau_lower_bound*np.ones(nb_action)                                                                  # Action lower bound vector

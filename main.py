@@ -137,8 +137,8 @@ def run(**kwargs):
         update_step_counter, ep_return = RLAC.RL_Solve(prev_state, ep, rand_time, env, tau_TO, prioritized_buffer)
 
         # Plot rollouts every conf.log_rollout_interval-training episodes (saved in a separate folder)
-        if ep >= conf.ep_no_update and ep%conf.log_rollout_interval==0:
-            _, _, _ = plot_fun.rollout(update_step_counter, CACTO.actor_model, env, rand_time, conf.init_states_sim, diff_loc=1)     
+        #if ep >= conf.ep_no_update and ep%conf.log_rollout_interval==0:
+        #    _, _, _ = plot_fun.rollout(update_step_counter, CACTO.actor_model, env, rand_time, conf.init_states_sim, diff_loc=1)     
 
         # Plot rollouts and save the NNs every conf.log_rollout_interval-training episodes
         if ep >= conf.ep_no_update and conf.log_interval!=1 and conf.log_interval!=0 and ep%conf.log_interval==0: 
@@ -155,6 +155,11 @@ def run(**kwargs):
 
     time_end = time.time()
     print('Elapsed time: ', time_end-time_start)
+
+    import pickle
+    f = open('./{}/S.pkl'.format(conf.wd),"wb")
+    pickle.dump(CACTO.loss_tot,f)
+    f.close()
 
     # Plot returns
     # plot_fun.plot_AvgReturn(avg_reward_list)
