@@ -8,7 +8,7 @@ from CACTO import CACTO
 import numpy as np
 import random
 import math
-
+import time
        
 class TO_Pyomo(CACTO):
     '''
@@ -206,7 +206,7 @@ class TO_Pyomo(CACTO):
             m.q1 = Var(m.k, initialize=init_q1(m,m.k,1,init_TO_states))
             m.v0 = Var(m.k, initialize=init_v0(m,m.k,2,init_TO_states))
             m.v1 = Var(m.k, initialize=init_v1(m,m.k,3,init_TO_states))
-        else:    
+        else:   
             m.tau0 = Var(m.k, initialize=init_tau0(m,m.k,0), bounds=(self.conf.u_min[0], self.conf.u_max[0])) 
             m.tau1 = Var(m.k, initialize=init_tau1(m,m.k,1), bounds=(self.conf.u_min[1], self.conf.u_max[1])) 
             m.q0 = Var(m.k, initialize=init_q0(m,m.k,0,ICS))
@@ -214,8 +214,8 @@ class TO_Pyomo(CACTO):
             m.v0 = Var(m.k, initialize=init_v0(m,m.k,2,ICS))
             m.v1 = Var(m.k, initialize=init_v1(m,m.k,3,ICS))
         
-        m.a0 = Var(m.k, initialize=init_a0)
-        m.a1 = Var(m.k, initialize=init_a1)
+        #m.a0 = Var(m.k, initialize=init_a0)
+        #m.a1 = Var(m.k, initialize=init_a1)
 
         m.icfix_q0 = Constraint(rule = lambda m: m.q0[0] == ICS[0])
         m.icfix_q1 = Constraint(rule = lambda m: m.q1[0] == ICS[1])
@@ -223,16 +223,16 @@ class TO_Pyomo(CACTO):
         m.icfix_v1 = Constraint(rule = lambda m: m.v1[0] == ICS[3])        
 
         m.v0_update = Constraint(m.k, rule = lambda m, k:
-           m.v0[k+1] == m.v0[k] + self.conf.dt*m.a0[k] if k < N else Constraint.Skip)
+           m.v0[k+1] == m.v0[k] + self.conf.dt*m.tau0[k] if k < N else Constraint.Skip)
 
         m.v1_update = Constraint(m.k, rule = lambda m, k:
-           m.v1[k+1] == m.v1[k] + self.conf.dt*m.a1[k] if k < N else Constraint.Skip)
+           m.v1[k+1] == m.v1[k] + self.conf.dt*m.tau1[k] if k < N else Constraint.Skip)
 
         m.q0_update = Constraint(m.k, rule = lambda m, k:
-           m.q0[k+1] == m.q0[k] + self.conf.dt*m.v0[k] if k < N else Constraint.Skip)
+           m.q0[k+1] == m.q0[k] + self.conf.dt*m.v0[k] + self.conf.dt**2*m.tau0[k]/2 if k < N else Constraint.Skip) ### m.q0[k] + self.conf.dt*m.v0[k] !!! nel manipolatore non ho il temine delle accelerazioni
 
         m.q1_update = Constraint(m.k, rule = lambda m, k:
-           m.q1[k+1] == m.q1[k] + self.conf.dt*m.v1[k] if k < N else Constraint.Skip)
+           m.q1[k+1] == m.q1[k] + self.conf.dt*m.v1[k] + self.conf.dt**2*m.tau1[k]/2 if k < N else Constraint.Skip) ### m.q1[k] + self.conf.dt*m.v1[k] !!! nel manipolatore non ho il temine delle accelerazioni
 
         #rename reward parameters
         alpha = self.conf.soft_max_param[0]
@@ -297,6 +297,7 @@ class TO_Pyomo(CACTO):
         try:
             results = solver.solve(TO_mdl)                              
             if str(results.solver.termination_condition) == "optimal":    
+                
                 #Retrieve control trajectory
                 tau0_TO = [TO_mdl.tau0[k]() for k in K]
                 tau1_TO = [TO_mdl.tau1[k]() for k in K]
@@ -308,11 +309,7 @@ class TO_Pyomo(CACTO):
             else:
                 print('TO solution not optimal')    
 
-                tau0_TO = [TO_mdl.tau0[k]() for k in K]
-                tau1_TO = [TO_mdl.tau1[k]() for k in K]
-                t0 = np.array(tau0_TO).reshape(len(K),1)
-                t1 = np.array(tau1_TO).reshape(len(K),1)
-                tau_TO = np.concatenate((t0, t1),axis=1)   
+                tau_TO = None  
 
                 TO = 0
                             
@@ -328,7 +325,7 @@ class TO_Pyomo(CACTO):
 
         # START TO PROBLEM 
         while TO==0:
-            
+
             # Randomize initial state 
             if self.system_id == 'double_integrator':
                 rand_time = random.uniform(0,(self.conf.NSTEPS-1)*self.conf.dt)
@@ -349,7 +346,7 @@ class TO_Pyomo(CACTO):
                 tf_prev_state = tf.expand_dims(tf.convert_to_tensor(prev_state_norm), 0)   
             else:
                 tf_prev_state = tf.expand_dims(tf.convert_to_tensor(prev_state), 0)         
-
+            
             # Set the horizon of TO problem / RL episode 
             CACTO.NSTEPS_SH = self.conf.NSTEPS - int(round(rand_time/self.conf.dt))  
 
@@ -359,21 +356,21 @@ class TO_Pyomo(CACTO):
             
             CACTO.x_ee_arr = [self.env.get_end_effector_position(CACTO.state_arr[-1,:])[0]]
             CACTO.y_ee_arr = [self.env.get_end_effector_position(CACTO.state_arr[-1,:])[1]] 
-                 
+
             # Actor rollout used to initialize TO state and control variables
             init_TO_states = np.zeros((self.conf.nb_state, CACTO.NSTEPS_SH+1))
             for i in range(self.conf.robot.nq+self.conf.robot.nv):
                 init_TO_states[i][0] = prev_state[i]                    
             init_TO_controls = np.zeros((self.conf.nb_action, CACTO.NSTEPS_SH+1))
             for i in range(self.conf.robot.na):
-                init_TO_controls[i][0] = tf.squeeze(CACTO.actor_model(tf_prev_state)).numpy()[i]
+                init_TO_controls[i][0] = tf.squeeze(CACTO.actor_model(tf_prev_state)).numpy()[i] #####
             init_prev_state = np.copy(prev_state)
-
+            
             # Simulate actor's actions to compute the state trajectory used to initialize TO state variables
             for i in range(1, CACTO.NSTEPS_SH+1):    
                 init_TO_controls_sim = np.empty(self.conf.nb_action)
                 for j in range(self.conf.nb_action):
-                    init_TO_controls_sim[j] = init_TO_controls[j][i-1]                                                                                                                               
+                    init_TO_controls_sim[j] = init_TO_controls[j][i-1] #####                                                                                                                               
                 init_next_state =  env.simulate(init_prev_state,init_TO_controls_sim)
 
                 for j in range(self.conf.robot.nv + self.conf.robot.nq):
@@ -385,10 +382,10 @@ class TO_Pyomo(CACTO):
                 else:    
                     init_tf_next_state = tf.expand_dims(tf.convert_to_tensor(init_next_state), 0)  
                 for j in range(self.conf.robot.na):      
-                    init_TO_controls[j][i] = tf.squeeze(CACTO.actor_model(init_tf_next_state)).numpy()[j]
+                    init_TO_controls[j][i] = tf.squeeze(CACTO.actor_model(init_tf_next_state)).numpy()[j] #####
                 
                 init_prev_state = np.copy(init_next_state)
-
+            
             # sys_dep #
             if self.system_id == 'double_integrator':
                 TO, tau_TO = self.TO_DoubleIntegrator_Solve(ep, prev_state, init_TO_controls, init_TO_states) 
@@ -396,11 +393,10 @@ class TO_Pyomo(CACTO):
                 TO, tau_TO = self.TO_Manipulator_Solve(ep, prev_state, init_TO_controls, init_TO_states)
             else:
                 print('Pyomo {} model not found'.format(self.system_id))
-
             # Plot TO solution    
             # plot_results_TO(TO_mdl)   
-              
-        return rand_time, prev_state, tau_TO                  
+        return rand_time, prev_state, tau_TO       
+     
 
 class TO_Casadi(CACTO):
     def __init__(self, env, conf):

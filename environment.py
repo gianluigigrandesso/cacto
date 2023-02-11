@@ -190,7 +190,7 @@ class Manipulator(gym.Env):
                 vel_joint_list.append(0)
         vel_joint = tf.cast(tf.stack(vel_joint_list),tf.float32)
     
-        r = (w_d*(-(x_ee[:]-TARGET_STATE[0])**2 -(y_ee[:]-TARGET_STATE[1])**2) + w_peak*peak_reward -w_v*vel_joint - w_ob1*ell1_pen - w_ob2*ell2_pen - w_ob3*ell3_pen - w_u*(u[:,0]**2 + u[:,1]**2 + u[:,2]**2))/100 
+        r = (w_d*(-(x_ee[:]-TARGET_STATE[0])**2 -(y_ee[:]-TARGET_STATE[1])**2) + w_peak*peak_reward -w_v*vel_joint - w_ob1*ell1_pen - w_ob2*ell2_pen - w_ob3*ell3_pen - w_u*(u.dot(u)) + 10000)/100 
         r = tf.reshape(r, [r.shape[0], 1])
 
         return r 
@@ -438,7 +438,7 @@ class DoubleIntegrator(gym.Env):
         else:    
             vel_joint = 0
 
-        r = (w_d*(-(x_ee-TARGET_STATE[0])**2 -(y_ee-TARGET_STATE[1])**2) + w_peak*peak_reward - w_v*vel_joint - w_ob1*ell1_pen - w_ob2*ell2_pen - w_ob3*ell3_pen - w_u*(u.dot(u)))/100 
+        r = (w_d*(-(x_ee-TARGET_STATE[0])**2 -(y_ee-TARGET_STATE[1])**2) + w_peak*peak_reward - w_v*vel_joint - w_ob1*ell1_pen - w_ob2*ell2_pen - w_ob3*ell3_pen - w_u*(u.dot(u)) + 10000)/100 
 
         return r
 
@@ -511,7 +511,7 @@ class DoubleIntegrator(gym.Env):
 
         # Simulate control u
         self.simu.simulate(state, u, self.dt, 1)
-       
+
         # Return next state
         state_next[:nq], state_next[nq:nx] = np.copy(self.simu.q), np.copy(self.simu.v)
         state_next[-1] = state[-1] + self.dt

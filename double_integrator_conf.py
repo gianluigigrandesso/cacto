@@ -4,7 +4,7 @@ from robot_utils import RobotWrapper, RobotSimulator
 import os
 
 ''' CACTO parameters '''
-ep_no_update = 0                                                                                            # Episodes to wait before starting to update the NNs
+ep_no_update = 10                                                                                            # Episodes to wait before starting to update the NNs
 NEPISODES = 50000+ep_no_update                                                                              # Max training episodes
 EP_UPDATE = 25                                                                                              # Number of episodes before updating critic and actor
 NSTEPS = 200                                                                                                # Max episode length
@@ -16,7 +16,7 @@ REPLAY_SIZE = 2**15                                                             
 BATCH_SIZE = 128                                                                                             # Size of the mini-batch 
 
 log_rollout_interval = 10                                                                                   # plot.rollout() interval
-log_interval = 1000                                                                                           # Log interval
+log_interval = 500                                                                                           # Log interval
 
 NH1 = 256                                                                                                   # 1st hidden layer size
 NH2 = 256                                                                                                   # 2nd hidden layer size  
@@ -66,15 +66,15 @@ wreg_l2_A = 1e-2                                                                
 wreg_l1_C = 1e-2                                                                                            # Weight of L1 regularization in critic's network
 wreg_l2_C = 1e-2                                                                                            # Weight of L2 regularization in critic's network
 
-SOBOLEV = 1                                                                                                 # Flag to use Sobolev training
-wd = 0.1                                                                                                      # Derivative-related loss weight
+SOBOLEV = 0                                                                                                 # Flag to use Sobolev training
+wd = 0                                                                                                      # Derivative-related loss weight
 
 # Set TD_N ONLY is SOBOLEV not used
 if SOBOLEV == 1:
     TD_N = 0
     nsteps_TD_N = 0
 else:
-    TD_N = 1                                                                                                # Flag to use n-step TD rather than 1-step TD
+    TD_N = 0                                                                                                # Flag to use n-step TD rather than 1-step TD
     nsteps_TD_N = 1  
     
 
@@ -105,7 +105,7 @@ obs_param = np.array([XC1, YC1, XC2, YC2, XC3, YC3, A1, B1, A2, B2, A3, B3])    
 w_d = 100                                                                                                   # Distance from target weight
 w_u = 10                                                                                                    # Control effort weight
 w_peak = 5e5                                                                                                # Target threshold weight
-w_ob = 2e6                                                                                                  # Obstacle weight
+w_ob = 1e6                                                                                                  # Obstacle weight
 w_v = 0                                                                                                     # Velocity weight
 weight = np.array([w_d, w_u, w_peak, w_ob, w_v])                                                            # Weights vector
 

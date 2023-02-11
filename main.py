@@ -18,8 +18,6 @@ import matplotlib.pyplot as plt
 
 def run(**kwargs):
 
-    time_start = time.time()
-
     ### Select system and TO method ###
     system_id    = kwargs['system_id'] 
     TO_method = kwargs['TO_method']
@@ -43,7 +41,7 @@ def run(**kwargs):
         sys.exit()
 
 
-    # os.environ["CUDA_VISIBLE_DEVICES"]="-1"     # Uncomment to run TF on CPU rather than GPU                         
+    #os.environ["CUDA_VISIBLE_DEVICES"]="-1"     # Uncomment to run TF on CPU rather than GPU                         
 
     # To run TF on CPU rather than GPU (seems faster since the NNs are small and some gradients are computed with Pinocchio on CPU --> bottleneck = communication CPU-GPU?)
     # os.environ["CUDA_VISIBLE_DEVICES"]="-1"     
@@ -127,9 +125,11 @@ def run(**kwargs):
     ep_reward_list = []                                                                                     
     avg_reward_list = []
 
+    time_start = time.time()
+
     ### START TRAINING ###
     for ep in range(nb_starting_episode,conf.NEPISODES): 
-
+        
         # TO #
         rand_time, prev_state, tau_TO = TrOp.TO_Solve(ep, env)
 
@@ -137,19 +137,28 @@ def run(**kwargs):
         update_step_counter, ep_return = RLAC.RL_Solve(prev_state, ep, rand_time, env, tau_TO, prioritized_buffer)
 
         # Plot rollouts every conf.log_rollout_interval-training episodes (saved in a separate folder)
-        #if ep >= conf.ep_no_update and ep%conf.log_rollout_interval==0:
-        #    _, _, _ = plot_fun.rollout(update_step_counter, CACTO.actor_model, env, rand_time, conf.init_states_sim, diff_loc=1)     
+        # if ep >= conf.ep_no_update and ep%conf.log_rollout_interval==0:
+        #     _, _, _ = plot_fun.rollout(update_step_counter, CACTO.actor_model, env, rand_time, conf.init_states_sim, diff_loc=1)     
 
         # Plot rollouts and save the NNs every conf.log_rollout_interval-training episodes
-        if ep >= conf.ep_no_update and conf.log_interval!=1 and conf.log_interval!=0 and ep%conf.log_interval==0: 
-            #_, _, _ = plot_fun.rollout(update_step_counter, CACTO.actor_model, env, rand_time, conf.init_states_sim)        
-            CACTO.actor_model.save_weights(conf.NNs_path+"/actor_{}.h5".format(update_step_counter))
-            CACTO.critic_model.save_weights(conf.NNs_path+"/critic_{}.h5".format(update_step_counter))
-            CACTO.target_critic.save_weights(conf.NNs_path+"/target_critic_{}.h5".format(update_step_counter))
+        # if ep >= conf.ep_no_update and conf.log_interval!=1 and conf.log_interval!=0 and ep%conf.log_interval==0: 
+        #     _, _, _ = plot_fun.rollout(update_step_counter, CACTO.actor_model, env, rand_time, conf.init_states_sim)        
+        #     CACTO.actor_model.save_weights(conf.NNs_path+"/actor_{}.h5".format(update_step_counter))
+        #     CACTO.critic_model.save_weights(conf.NNs_path+"/critic_{}.h5".format(update_step_counter))
+        #     CACTO.target_critic.save_weights(conf.NNs_path+"/target_critic_{}.h5".format(update_step_counter))
  
         # ep_reward_list.append(ep_return)
         # avg_reward = np.mean(ep_reward_list[-40:])  # Mean of last 40 episodes
         # avg_reward_list.append(avg_reward)
+
+        if ep%conf.log_interval==0: 
+            import pickle
+            f = open('./{}/S.pkl'.format(conf.wd),"wb")
+            pickle.dump(CACTO.loss_tot,f)
+            f.close()
+
+        with open('./{}/EpisodeTable.txt'.format(conf.wd), 'a') as file:
+            file.write("Episode  {}  --->   Return = {} \n".format(ep, ep_return))
 
         print("Episode  {}  --->   Return = {}".format(ep, ep_return))
 
@@ -171,7 +180,7 @@ def run(**kwargs):
     CACTO.target_critic.save_weights(conf.NNs_path+"/target_critic_final.h5")
 
     # Simulate the final policy
-    #tau_all_final_sim, x_ee_all_final_sim, y_ee_all_final_sim = rollout(update_step_counter)
+    # tau_all_final_sim, x_ee_all_final_sim, y_ee_all_final_sim = rollout(update_step_counter)
 
 def parse_args():
     """
