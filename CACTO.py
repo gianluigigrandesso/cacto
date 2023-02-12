@@ -20,7 +20,7 @@ class CACTO():
     :param wd:                          (float) Derivative-related loss weight
     :param NSTEPS:                      (int) Max episode length
     :param EPISODE_ICS_INIT:            (int) Episodes where ICS warm-starting is used instead of actor rollout
-
+ 
     :param LR_SCHEDULE:                 (bool) Flag to use a scheduler for the learning rates
     :param NH1:                         (int) 1st hidden layer size
     :param NH2:                         (int) 2st hidden layer size 
