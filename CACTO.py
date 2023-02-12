@@ -44,21 +44,20 @@ class CACTO():
     :param NNs_path:                    (str) NNs save path
 
     ### Cost function parameters ###
-    :param soft_max_param:              (array float) Soft parameters vector
-    :param obs_param:                   (array float) Obtacle parameters vector
-    :param weight:                      (array float) Weights vector
-    :param TARGET_STATE:                (array float) Target position
+    :param soft_max_param:              (float array) Soft parameters array
+    :param obs_param:                   (float array) Obtacle parameters array
+    :param weight:                      (float array) Weights array
+    :param TARGET_STATE:                (float array) Target position
 
     ### Robot parameters ###
-    :param dt:                          (float) 
-    :param robot:                       (Robot Wrapper instance) 
-    :param nb_state:                    (int) 
-    :param nb_action:                   (int) 
-    :param u_min:                       (array float) 
-    :param u_max:                       (array float) 
-    :param state_norm_arr:              (array float) 
+    :param dt:                          (float) Timestep
+    :param robot:                       (RobotWrapper instance) 
+    :param nb_state:                    (int) State size (robot state size + 1)
+    :param nb_action:                   (int) Action size (robot action size)
+    :param u_min:                       (float array) Action lower bound array
+    :param u_max:                       (float array) Action upper bound array
+    :param state_norm_arr:              (float array) Array used to normalize states
     '''
-
 
     # Initialize variables used both in TO and RL
     NSTEPS_SH = None
@@ -66,8 +65,6 @@ class CACTO():
     state_arr = None
     x_ee_arr = []
     y_ee_arr = []
-
-    loss_tot = {}
     
     actor_model = None
     critic_model = None
@@ -94,40 +91,38 @@ class CACTO():
             
     # Create actor NN 
     def get_actor(self):
-
         inputs = layers.Input(shape=(self.conf.nb_state,))
-
+        
         lay1 = layers.Dense(self.conf.NH1,kernel_regularizer=regularizers.l1_l2(self.conf.wreg_l1_A,self.conf.wreg_l2_A),bias_regularizer=regularizers.l1_l2(self.conf.wreg_l1_A,self.conf.wreg_l2_A))(inputs)                                        
         leakyrelu1 = layers.LeakyReLU()(lay1)
-    
+        
         lay2 = layers.Dense(self.conf.NH2, kernel_regularizer=regularizers.l1_l2(self.conf.wreg_l1_A,self.conf.wreg_l2_A),bias_regularizer=regularizers.l1_l2(self.conf.wreg_l1_A,self.conf.wreg_l2_A))(leakyrelu1)                                           
         leakyrelu2 = layers.LeakyReLU()(lay2)
-
+        
         outputs = layers.Dense(self.conf.nb_action, activation="tanh", kernel_regularizer=regularizers.l1_l2(self.conf.wreg_l1_A,self.conf.wreg_l2_A),bias_regularizer=regularizers.l1_l2(self.conf.wreg_l1_A,self.conf.wreg_l2_A))(leakyrelu2) 
         outputs = outputs * self.conf.u_max          # Bound actions
-
+        
         model = tf.keras.Model(inputs, outputs)
         return model 
 
     # Create critic NN 
     def get_critic(self): 
-
         state_input = layers.Input(shape=(self.conf.nb_state,))
-
+        
         state_out1 = layers.Dense(16, kernel_regularizer=regularizers.l1_l2(self.conf.wreg_l1_C,self.conf.wreg_l2_C),bias_regularizer=regularizers.l1_l2(self.conf.wreg_l1_C,self.conf.wreg_l2_C))(state_input) 
         leakyrelu1 = layers.LeakyReLU()(state_out1)
-
+        
         state_out2 = layers.Dense(32, kernel_regularizer=regularizers.l1_l2(self.conf.wreg_l1_C,self.conf.wreg_l2_C),bias_regularizer=regularizers.l1_l2(self.conf.wreg_l1_C,self.conf.wreg_l2_C))(leakyrelu1) 
         leakyrelu2 = layers.LeakyReLU()(state_out2)
-
+        
         out_lay1 = layers.Dense(self.conf.NH1, kernel_regularizer=regularizers.l1_l2(self.conf.wreg_l1_C,self.conf.wreg_l2_C),bias_regularizer=regularizers.l1_l2(self.conf.wreg_l1_C,self.conf.wreg_l2_C))(leakyrelu2)
         leakyrelu3 = layers.LeakyReLU()(out_lay1)
-
+        
         out_lay2 = layers.Dense(self.conf.NH2, kernel_regularizer=regularizers.l1_l2(self.conf.wreg_l1_C,self.conf.wreg_l2_C),bias_regularizer=regularizers.l1_l2(self.conf.wreg_l1_C,self.conf.wreg_l2_C))(leakyrelu3)
         leakyrelu4 = layers.LeakyReLU()(out_lay2)
-
+        
         outputs = layers.Dense(1, kernel_regularizer=regularizers.l1_l2(self.conf.wreg_l1_C,self.conf.wreg_l2_C),bias_regularizer=regularizers.l1_l2(self.conf.wreg_l1_C,self.conf.wreg_l2_C))(leakyrelu4)
-
+        
         model = tf.keras.Model([state_input], outputs)
         return model    
     

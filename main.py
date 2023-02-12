@@ -18,16 +18,21 @@ import matplotlib.pyplot as plt
 
 def run(**kwargs):
 
-    time_start = time.time()
-
-    ### Select system and TO method ###
-    system_id    = kwargs['system_id'] 
+    ###           Input           ###
+    system_id = kwargs['system_id'] 
     TO_method = kwargs['TO_method']
     if kwargs['seed'] == None:
         seed = random.randint(1,100000)
     else:
         seed = kwargs['seed']
+    CPU_flag = kwargs['CPU_flag'] 
+    if CPU_flag:
+        os.environ["CUDA_VISIBLE_DEVICES"]="-1"  
+        # To run TF on CPU rather than GPU (seems faster since the NNs are small and 
+        # some gradients are computed with Pinocchio on CPU --> bottleneck = communication CPU-GPU?)
+    tf.config.experimental.list_physical_devices('GPU')
     ##################################
+
 
 
     if system_id == 'manipulator':
@@ -41,13 +46,6 @@ def run(**kwargs):
     else:
         print('System {} not found'.format(system_id))
         sys.exit()
-
-
-    # os.environ["CUDA_VISIBLE_DEVICES"]="-1"     # Uncomment to run TF on CPU rather than GPU                         
-
-    # To run TF on CPU rather than GPU (seems faster since the NNs are small and some gradients are computed with Pinocchio on CPU --> bottleneck = communication CPU-GPU?)
-    # os.environ["CUDA_VISIBLE_DEVICES"]="-1"     
-    tf.config.experimental.list_physical_devices('GPU')
 
     # Create folders to store the results and the trained NNs
     try:
@@ -92,7 +90,7 @@ def run(**kwargs):
     random.seed(seed)
 
     # Create environment 
-    env = Environment(conf.dt, conf.x_init_min, conf.x_init_max, conf.x_min, conf.x_max, conf.u_min, conf.u_max, conf.TARGET_STATE, conf.soft_max_param, conf.obs_param, conf.weight, conf.robot, conf.nb_state, conf.nb_action, conf.NORMALIZE_INPUTS, conf.state_norm_arr, conf.simu) 
+    env = Environment(conf)
     env.seed(seed=seed)
 
     # Create CACTO instance
@@ -127,9 +125,11 @@ def run(**kwargs):
     ep_reward_list = []                                                                                     
     avg_reward_list = []
 
+    time_start = time.time()
+
     ### START TRAINING ###
     for ep in range(nb_starting_episode,conf.NEPISODES): 
-
+        
         # TO #
         rand_time, prev_state, tau_TO = TrOp.TO_Solve(ep, env)
 
@@ -141,29 +141,24 @@ def run(**kwargs):
         #    _, _, _ = plot_fun.rollout(update_step_counter, CACTO.actor_model, env, rand_time, conf.init_states_sim, diff_loc=1)     
 
         # Plot rollouts and save the NNs every conf.log_rollout_interval-training episodes
-        if ep >= conf.ep_no_update and conf.log_interval!=1 and conf.log_interval!=0 and ep%conf.log_interval==0: 
-            #_, _, _ = plot_fun.rollout(update_step_counter, CACTO.actor_model, env, rand_time, conf.init_states_sim)        
+        if ep >= conf.ep_no_update and ep%conf.log_interval==0: 
+        #    _, _, _ = plot_fun.rollout(update_step_counter, CACTO.actor_model, env, rand_time, conf.init_states_sim)        
             CACTO.actor_model.save_weights(conf.NNs_path+"/actor_{}.h5".format(update_step_counter))
             CACTO.critic_model.save_weights(conf.NNs_path+"/critic_{}.h5".format(update_step_counter))
             CACTO.target_critic.save_weights(conf.NNs_path+"/target_critic_{}.h5".format(update_step_counter))
  
-        # ep_reward_list.append(ep_return)
-        # avg_reward = np.mean(ep_reward_list[-40:])  # Mean of last 40 episodes
-        # avg_reward_list.append(avg_reward)
+        ep_reward_list.append(ep_return)
+        avg_reward = np.mean(ep_reward_list[-40:])  # Mean of last 40 episodes
+        avg_reward_list.append(avg_reward)
 
         print("Episode  {}  --->   Return = {}".format(ep, ep_return))
 
     time_end = time.time()
     print('Elapsed time: ', time_end-time_start)
 
-    import pickle
-    f = open('./{}/S.pkl'.format(conf.wd),"wb")
-    pickle.dump(CACTO.loss_tot,f)
-    f.close()
-
     # Plot returns
-    # plot_fun.plot_AvgReturn(avg_reward_list)
-    # plot_fun.plot_Return(ep_reward_list)
+    #plot_fun.plot_AvgReturn(avg_reward_list)
+    #plot_fun.plot_Return(ep_reward_list)
 
     # Save networks at the end of the training
     CACTO.actor_model.save_weights(conf.NNs_path+"/actor_final.h5")
@@ -171,7 +166,7 @@ def run(**kwargs):
     CACTO.target_critic.save_weights(conf.NNs_path+"/target_critic_final.h5")
 
     # Simulate the final policy
-    #tau_all_final_sim, x_ee_all_final_sim, y_ee_all_final_sim = rollout(update_step_counter)
+    # tau_all_final_sim, x_ee_all_final_sim, y_ee_all_final_sim = rollout(update_step_counter)
 
 def parse_args():
     """
@@ -184,6 +179,7 @@ def parse_args():
     parser.add_argument('--system-id',                      type=str,   default='-')
     parser.add_argument('--TO-method',                      type=str,   default='pyomo')
     parser.add_argument('--seed',                           type=int,   default=None)
+    parser.add_argument('--CPU-flag',                       type=bool,  default=False)
     args = parser.parse_args()
     dict_args = vars(args)
     return dict_args
