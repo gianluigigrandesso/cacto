@@ -4,7 +4,7 @@ from tensorflow.keras import layers, regularizers
 from pyomo.environ import *
 from pyomo.dae import *
 import numpy as np
- 
+   
 class CACTO():
     ''' 
     ### CACTO and NNs parameters ###
