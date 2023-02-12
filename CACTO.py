@@ -44,21 +44,20 @@ class CACTO():
     :param NNs_path:                    (str) NNs save path
 
     ### Cost function parameters ###
-    :param soft_max_param:              (array float) Soft parameters vector
-    :param obs_param:                   (array float) Obtacle parameters vector
-    :param weight:                      (array float) Weights vector
-    :param TARGET_STATE:                (array float) Target position
+    :param soft_max_param:              (float array) Soft parameters array
+    :param obs_param:                   (float array) Obtacle parameters array
+    :param weight:                      (float array) Weights array
+    :param TARGET_STATE:                (float array) Target position
 
     ### Robot parameters ###
-    :param dt:                          (float) 
-    :param robot:                       (Robot Wrapper instance) 
-    :param nb_state:                    (int) 
-    :param nb_action:                   (int) 
-    :param u_min:                       (array float) 
-    :param u_max:                       (array float) 
-    :param state_norm_arr:              (array float) 
+    :param dt:                          (float) Timestep
+    :param robot:                       (RobotWrapper instance) 
+    :param nb_state:                    (int) State size (robot state size + 1)
+    :param nb_action:                   (int) Action size (robot action size)
+    :param u_min:                       (float array) Action lower bound array
+    :param u_max:                       (float array) Action upper bound array
+    :param state_norm_arr:              (float array) Array used to normalize states
     '''
-
 
     # Initialize variables used both in TO and RL
     NSTEPS_SH = None
@@ -66,8 +65,6 @@ class CACTO():
     state_arr = None
     x_ee_arr = []
     y_ee_arr = []
-
-    loss_tot = {}
     
     actor_model = None
     critic_model = None

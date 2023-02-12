@@ -4,9 +4,9 @@ from robot_utils import RobotWrapper, RobotSimulator
 import os
 
 ''' CACTO parameters '''
-ep_no_update = 100                                                                                          # Episodes to wait before starting to update the NNs
+ep_no_update = 0                                                                                            # Episodes to wait before starting to update the NNs
 NEPISODES = 50000+ep_no_update                                                                              # Max training episodes
-EP_UPDATE = 25                                                                                              # Number of episodes before updating critic and actor
+EP_UPDATE = 1                                                                                               # Number of episodes before updating critic and actor
 NSTEPS = 100                                                                                                # Max episode length
 CRITIC_LEARNING_RATE = 0.001                                                                                # Learning rate for the critic network
 ACTOR_LEARNING_RATE = 0.0005                                                                                # Learning rate for the policy network
@@ -15,8 +15,8 @@ UPDATE_LOOPS = 160                                                              
 REPLAY_SIZE = 2**15                                                                                         # Size of the replay buffer
 BATCH_SIZE = 64                                                                                             # Size of the mini-batch 
 
-log_rollout_interval = 10                                                                                   # plot.rollout() interval
-log_interval = 50                                                                                           # Log interval
+log_rollout_interval = 100                                                                                  # plot.rollout() interval
+log_interval = 500                                                                                          # Log interval
 
 NH1 = 256                                                                                                   # 1st hidden layer size
 NH2 = 256                                                                                                   # 2nd hidden layer size  
@@ -136,6 +136,7 @@ Log_path = './Log//Manipulator'                                                 
 URDF_FILENAME = "planar_manipulator_3dof.urdf" 
 modelPath = os.getcwd()+"/urdf/" + URDF_FILENAME  
 robot = RobotWrapper.BuildFromURDF(modelPath, [modelPath])
+end_effector_frame_id = 'EE'
 
 # Dynamics parameters'
 simulate_coulomb_friction = 0                                                                               # To simulate friction

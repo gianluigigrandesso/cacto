@@ -4,19 +4,19 @@ from robot_utils import RobotWrapper, RobotSimulator
 import os
 
 ''' CACTO parameters '''
-ep_no_update = 10                                                                                            # Episodes to wait before starting to update the NNs
+ep_no_update = 10                                                                                           # Episodes to wait before starting to update the NNs
 NEPISODES = 50000+ep_no_update                                                                              # Max training episodes
 EP_UPDATE = 25                                                                                              # Number of episodes before updating critic and actor
 NSTEPS = 200                                                                                                # Max episode length
 CRITIC_LEARNING_RATE = 0.005                                                                                # Learning rate for the critic network
 ACTOR_LEARNING_RATE = 0.0005                                                                                # Learning rate for the policy network
 UPDATE_RATE = 0.0005                                                                                        # Homotopy rate to update the target critic network
-UPDATE_LOOPS = 80                                                                                          # Number of updates of both critic and actor performed every EP_UPDATE episodes  
+UPDATE_LOOPS = 80                                                                                           # Number of updates of both critic and actor performed every EP_UPDATE episodes  
 REPLAY_SIZE = 2**15                                                                                         # Size of the replay buffer
-BATCH_SIZE = 128                                                                                             # Size of the mini-batch 
+BATCH_SIZE = 128                                                                                            # Size of the mini-batch 
 
-log_rollout_interval = 10                                                                                   # plot.rollout() interval
-log_interval = 500                                                                                           # Log interval
+log_rollout_interval = 100                                                                                  # plot.rollout() interval
+log_interval = 200                                                                                          # Log interval
 
 NH1 = 256                                                                                                   # 1st hidden layer size
 NH2 = 256                                                                                                   # 2nd hidden layer size  
@@ -136,6 +136,7 @@ Log_path = './Log/DoubleIntegrator/'                                            
 URDF_FILENAME = "double_integrator.urdf" 
 modelPath = os.getcwd()+"/urdf/" + URDF_FILENAME  
 robot = RobotWrapper.BuildFromURDF(modelPath, [modelPath])
+end_effector_frame_id = 'EE'
 
 # Dynamics parameters'
 simulate_coulomb_friction = 0                                                                               # To simulate friction
@@ -150,11 +151,11 @@ M = 0.5                                                                         
 
 # State parameters 
 dt = 0.05                                                                                                   # Timestep   
-x_min = np.array([-np.inf, -np.inf, -np.inf, -np.inf, 0])                                                   # State size (robot state size +1)
-x_init_min = np.array([-15, -15, -6, -6, 0])                                                                # State lower bound vector
-x_max = np.array([np.inf, np.inf, np.inf, np.inf, np.inf])                                                  # State lower bound initial configuration vector
-x_init_max = np.array([ 15,  15,  6,  6, (NSTEPS-1)*dt])                                                    # State upper bound vector
-nb_state = robot.nq + robot.nv + 1                                                                                        # State upper bound initial configuration vector
+nb_state = robot.nq + robot.nv + 1                                                                          # State size (robot state size +1)
+x_min = np.array([-np.inf, -np.inf, -np.inf, -np.inf, 0])                                                   # State lower bound vector
+x_init_min = np.array([-15, -15, -6, -6, 0])                                                                # State lower bound initial configuration array
+x_max = np.array([np.inf, np.inf, np.inf, np.inf, np.inf])                                                  # State upper bound vector
+x_init_max = np.array([ 15,  15,  6,  6, (NSTEPS-1)*dt])                                                    # State upper bound initial configuration array
 state_norm_arr = np.array([15, 15, 6, 6, int(NSTEPS*dt)])                                                   # Array used to normalize states
 
 # initial configurations for plot.rollout()

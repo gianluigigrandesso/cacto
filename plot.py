@@ -18,12 +18,10 @@ class PLOT():
 
         return 
 
-
-    @tf.function
+    #@tf.function
 
     # Plot policy rollout from a single initial state as well as state and control trajectories
     def plot_policy(self, tau, x, y, steps, n_updates, diff_loc=0, PRETRAIN=0):
-
         timesteps = self.conf.dt*np.arange(steps)
         fig = plt.figure(figsize=(12,8))
         plt.suptitle('POLICY: Discrete model, N try = {} N updates = {}'.format(self.conf.N_try,n_updates), y=1, fontsize=20)
@@ -37,10 +35,12 @@ class PLOT():
         ax1.set_ylabel('[m]',fontsize=20)    
 
         col = ['ro', 'bo', 'go']
-        ax2 = fig.add_subplot(2, 2, self.conf.robot.na)
-        for i in range(self.conf.robot.na):
+        legend_list = []
+        ax2 = fig.add_subplot(2, 2, self.conf.nb_action)
+        for i in range(self.conf.nb_action):
             ax2.plot(timesteps, tau[:,i], col[i], linewidth=1, markersize=1) 
-        #ax2.legend(['tau0','tau1','tau2'],fontsize=20) 
+            legend_list.append('tau{}'.format(i))
+        ax2.legend(legend_list,fontsize=20) 
         ax2.set_xlabel('Time [s]',fontsize=20)
         ax2.set_title('Controls',fontsize=20)
 
@@ -59,7 +59,7 @@ class PLOT():
 
         #ax3.plot([conf.x_base],[3*conf.l],'ko',markersize=5)   
 
-        ax3.plot([self.TARGET_STATE[0]],[self.TARGET_STATE[1]],'b*',markersize=10) 
+        ax3.plot([self.conf.TARGET_STATE[0]],[self.conf.TARGET_STATE[1]],'b*',markersize=10) 
         ax3.set_xlim([-41, 31])
         ax3.set_aspect('equal', 'box')
         ax3.set_title('Plane',fontsize=20)
@@ -69,15 +69,14 @@ class PLOT():
 
         for ax in [ax1, ax2, ax3]:
             ax.grid(True)
-
         fig.tight_layout()
         if PRETRAIN:
-            plt.savefig(self.Fig_path+'/PolicyEvaluation_Pretrain_Manipulator3DoF_3OBS_{}_{}'.format(self.conf.N_try,n_updates))
+            plt.savefig(self.conf.Fig_path+'/PolicyEvaluation_Pretrain_{}_{}'.format(self.conf.N_try,n_updates))
         else:    
             if diff_loc==0:
-                plt.savefig(self.Fig_path+'/PolicyEvaluation_Manipulator3DoF_3OBS_{}_{}'.format(self.conf.N_try,n_updates))
+                plt.savefig(self.conf.Fig_path+'/PolicyEvaluation_{}_{}'.format(self.conf.N_try,n_updates))
             else:
-                plt.savefig(self.Fig_path+'/Actor/PolicyEvaluation_Manipulator3DoF_3OBS_{}_{}'.format(self.conf.N_try,n_updates))
+                plt.savefig(self.conf.Fig_path+'/Actor/PolicyEvaluation_{}_{}'.format(self.conf.N_try,n_updates))
         plt.clf()
         plt.close(fig)
 
@@ -125,31 +124,27 @@ class PLOT():
         ax.set_ylim(-35, 35)
         ax.grid(True)
         fig.tight_layout()
-        plt.show()
         if PRETRAIN:
-            plt.savefig(self.conf.Fig_path+'/PolicyEvaluationMultiInit_Pretrain_Manipulator3DoF_3OBS_{}_{}'.format(self.conf.N_try,n_updates))
+            plt.savefig(self.conf.Fig_path+'/PolicyEvaluationMultiInit_Pretrain_{}_{}'.format(self.conf.N_try,n_updates))
         else:    
             if diff_loc==0:
-                plt.savefig(self.conf.Fig_path+'/PolicyEvaluationMultiInit_Manipulator3DoF_3OBS_{}_{}'.format(self.conf.N_try,n_updates))
+                plt.savefig(self.conf.Fig_path+'/PolicyEvaluationMultiInit_{}_{}'.format(self.conf.N_try,n_updates))
             else:
-                plt.savefig(self.conf.Fig_path+'/Actor/PolicyEvaluationMultiInit_Manipulator3DoF_3OBS_{}_{}'.format(self.conf.N_try,n_updates))
+                plt.savefig(self.conf.Fig_path+'/Actor/PolicyEvaluationMultiInit_{}_{}'.format(self.conf.N_try,n_updates))
+        #plt.show()
         plt.clf()
         plt.close(fig)
 
     # Plot rollout of the actor from some initial states. It generates the results and then calls plot_policy() and plot_policy_eval()
     def rollout(self,update_step_cntr, actor_model, env, rand_time, init_states_sim, diff_loc=0, PRETRAIN=0):
 
-        #init_states_sim = [np.array([math.pi/4,-math.pi/8,-math.pi/8,0.0,0.0,0.0,0.0]),np.array([-math.pi/4,math.pi/8,math.pi/8,0.0,0.0,0.0,0.0]),np.array([math.pi/2,0.0,0.0,0.0,0.0,0.0,0.0]),np.array([-math.pi/2,0.0,0.0,0.0,0.0,0.0,0.0]),np.array([3*math.pi/4,0.0,0.0,0.0,0.0,0.0,0.0]),np.array([-3*math.pi/4,0.0,0.0,0.0,0.0,0.0,0.0]),np.array([math.pi/4,0.0,0.0,0.0,0.0,0.0,0.0]),np.array([-math.pi/4,0.0,0.0,0.0,0.0,0.0,0.0]),np.array([math.pi,0.0,0.0,0.0,0.0,0.0,0.0])]
         tau_all_sim = np.empty((len(init_states_sim)*(self.conf.NSTEPS),self.conf.robot.na))
-        x_ee_arr_sim = np.empty(self.conf.NSTEPS)
-        y_ee_arr_sim = np.empty(self.conf.NSTEPS)
         x_ee_all_sim = []
         y_ee_all_sim = []
-        import time
+
         for k in range(len(init_states_sim)):
-            #tau_arr_sim = []
-            x_ee_arr_sim[0] = env.get_end_effector_position(init_states_sim[k])[0]
-            y_ee_arr_sim[0] = env.get_end_effector_position(init_states_sim[k])[1]
+            x_ee_arr_sim = [env.get_end_effector_position(init_states_sim[k])[0]]
+            y_ee_arr_sim = [env.get_end_effector_position(init_states_sim[k])[1]]
             prev_state_sim = np.copy(init_states_sim[k])
             episodic_reward_sim = 0
 
@@ -167,10 +162,10 @@ class PLOT():
                 rwrd_sim = env.reward(rand_time, next_state_sim,ctrl_sim)
 
                 episodic_reward_sim += rwrd_sim
-                #tau_arr_sim.append(ctrl_sim)
+
                 tau_all_sim[i + k*(self.conf.NSTEPS), :] = ctrl_sim
-                x_ee_arr_sim[i + 1] = env.get_end_effector_position(next_state_sim)[0]
-                y_ee_arr_sim[i + 1] = env.get_end_effector_position(next_state_sim)[1]
+                x_ee_arr_sim.append(env.get_end_effector_position(next_state_sim)[0])
+                y_ee_arr_sim.append(env.get_end_effector_position(next_state_sim)[1])
                 prev_state_sim = np.copy(next_state_sim)
 
                 if i==self.conf.NSTEPS-2:
@@ -183,12 +178,10 @@ class PLOT():
                     ctrl = actor_model(tf_x_sim)
                     ctrl_sim = tf.squeeze(ctrl).numpy()
                     tau_all_sim[i + k*(self.conf.NSTEPS), :] = ctrl_sim
-                    #tau_arr_sim.append(ctrl_sim)
             if k==2:
-                #self.plot_policy(tau_all_sim[(self.conf.NSTEPS):2*(self.conf.NSTEPS)],x_ee_arr_sim,y_ee_arr_sim,self.conf.NSTEPS,update_step_cntr, diff_loc=diff_loc, PRETRAIN=PRETRAIN)
+                self.plot_policy(tau_all_sim[(k-1)*(self.conf.NSTEPS):k*(self.conf.NSTEPS)], x_ee_arr_sim, y_ee_arr_sim, self.conf.NSTEPS, update_step_cntr, diff_loc=diff_loc, PRETRAIN=PRETRAIN)
                 print("N try = {}: Simulation Return @ N updates = {} ==> {}".format(self.conf.N_try,update_step_cntr,episodic_reward_sim))
-
-            #tau_all_sim.append(np.copy(tau_arr_sim))             
+                
             x_ee_all_sim.append(np.copy(x_ee_arr_sim))  
             y_ee_all_sim.append(np.copy(y_ee_arr_sim))
 
@@ -219,9 +212,11 @@ class PLOT():
 
         ax2 = fig.add_subplot(2, 2, 3)
         col = ['ro', 'bo', 'go']
+        legend_list = []
         for i in range(self.conf.robot.na):
             ax2.plot(timesteps, tau[:,i], col[i], linewidth=1, markersize=1) 
-        #ax2.legend(['tau0','tau1','tau2'],fontsize=20) 
+            legend_list.append('tau{}'.format(i))
+        ax2.legend(legend_list,fontsize=20) 
         ax2.set_xlabel('Time [s]',fontsize=20)
         ax2.set_title('Controls',fontsize=20)
 
@@ -262,7 +257,7 @@ class PLOT():
         ax.set_ylabel("Return")
         ax.set_title("N_try = {}".format(self.conf.N_try))
         ax.grid(True)
-        plt.savefig(self.conf.Fig_path+'/EpReturn_Manipulator3DoF_{}'.format(self.conf.N_try))
+        plt.savefig(self.conf.Fig_path+'/EpReturn_{}'.format(self.conf.N_try))
         plt.close()
 
     # Plot average return considering 40 episodes 
@@ -274,5 +269,5 @@ class PLOT():
         ax.set_ylabel("Avg. Return")
         ax.set_title("N_try = {}".format(self.conf.N_try))
         ax.grid(True)
-        plt.savefig(self.conf.Fig_path+'/AvgReturn_Manipulator3DoF_{}'.format(self.conf.N_try))
+        plt.savefig(self.conf.Fig_path+'/AvgReturn_{}'.format(self.conf.N_try))
         plt.close()
