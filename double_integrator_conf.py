@@ -122,7 +122,6 @@ TARGET_STATE = np.array([x_des,y_des])                                          
 
 
 ''' Path parameters '''
-#check = 0
 N_try = 1                                                                                                   # Id test
 Fig_path = './Results/Figures/DoubleIntegrator/N_try_{}'.format(N_try)                                      # Figure path
 NNs_path = './Results/NNs/DoubleIntegrator/N_try_{}'.format(N_try)                                          # NNs path

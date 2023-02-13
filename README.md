@@ -12,4 +12,4 @@
 - ***inits*** contains the functions for the selected *system* to warm-start TO (ICS, CACTO's rollout, 0s). 
 - ***urdf*** contains *system* URDF file. 
 
-*Systems*: double integrator and 3 DOF manipulator
+*Systems*: double integrator (double_integrator) and 3 DOF manipulator (manipulator)
