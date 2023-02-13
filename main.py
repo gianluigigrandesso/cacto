@@ -91,7 +91,6 @@ def run(**kwargs):
 
     # Create environment 
     env = Environment(conf)
-    env.seed(seed=seed)
 
     # Create CACTO instance
     cacto_instance = CACTO(env, conf)

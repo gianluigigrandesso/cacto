@@ -319,21 +319,9 @@ class TO_Pyomo(CACTO):
 
         # START TO PROBLEM 
         while TO==0:
-
-            # Randomize initial state 
-            if self.system_id == 'double_integrator':
-                rand_time = random.uniform(0,(self.conf.NSTEPS-1)*self.conf.dt)
-                state_prev = np.array([random.uniform(-15,15), random.uniform(-15,15),
-                                       random.uniform(-6,6), random.uniform(-6,6),
-                                       self.conf.dt*round(rand_time/self.conf.dt)])
-            elif self.system_id == 'manipulator':
-                rand_time = random.uniform(0,(self.conf.NSTEPS-1)*self.conf.dt)
-                state_prev = np.array([random.uniform(-math.pi,math.pi), random.uniform(-math.pi,math.pi), random.uniform(-math.pi,math.pi), 
-                                       random.uniform(-math.pi/4,math.pi/4), random.uniform(-math.pi/4,math.pi/4), random.uniform(-math.pi/4,math.pi/4),
-                                       self.conf.dt*round(rand_time/self.conf.dt)]) 
-            else:
-                rand_time, state_prev = self.env.reset()
-                        
+            # Select an initial state at random
+            rand_time, state_prev = self.env.reset()
+            
             if self.conf.NORMALIZE_INPUTS:
                 state_prev_norm = state_prev / self.conf.state_norm_arr
                 state_prev_norm[-1] = 2*state_prev_norm[-1] - 1

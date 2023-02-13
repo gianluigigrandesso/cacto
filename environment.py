@@ -6,6 +6,7 @@ import tensorflow as tf
 import pinocchio as pin
 from gym.utils import seeding
 import sys
+import random
 
 class Manipulator(gym.Env):
     '''
@@ -49,11 +50,10 @@ class Manipulator(gym.Env):
     def reset(self, options=None):
         ''' Choose initial state uniformly at random '''
         self._state = np.zeros(self.conf.nb_state)        
-        rand_time = self.np_random.uniform(self.conf.x_init_min[-1], self.conf.x_init_max[-1]) 
+        rand_time = random.uniform(self.conf.x_init_min[-1], self.conf.x_init_max[-1])
         for i in range(self.conf.nb_state-1): 
-            self._state[i] = self.np_random.uniform(self.conf.x_init_min[i], self.conf.x_init_max[i]) 
+            self._state[i] = random.uniform(self.conf.x_init_min[i], self.conf.x_init_max[i]) 
         self._state[-1] = self.conf.dt*round(rand_time/self.conf.dt)
-
         observation = self._state
 
         return rand_time, observation
@@ -294,12 +294,6 @@ class Manipulator(gym.Env):
         state_not_norm = state_no_time * mask + state_time * (1 - mask)
         return state_not_norm
     
-    def seed(self, seed=None):
-        ''' Generate a random number generator from seed '''
-        self.np_random, seed = seeding.np_random(seed)
-
-        return [seed]
-    
 
 
 
@@ -344,10 +338,10 @@ class DoubleIntegrator(gym.Env):
     
     def reset(self, options=None):
         ''' Choose initial state uniformly at random '''
-        self._state = np.zeros(self.conf.nb_state)        
-        rand_time = self.np_random.uniform(self.conf.x_init_min[-1], self.conf.x_init_max[-1]) 
+        self._state = np.zeros(self.conf.nb_state)     
+        rand_time = random.uniform(self.conf.x_init_min[-1], self.conf.x_init_max[-1]) 
         for i in range(self.conf.nb_state-1): 
-            self._state[i] = self.np_random.uniform(self.conf.x_init_min[i], self.conf.x_init_max[i]) 
+            self._state[i] = random.uniform(self.conf.x_init_min[i], self.conf.x_init_max[i]) 
         self._state[-1] = self.conf.dt*round(rand_time/self.conf.dt)
 
         observation = self._state
@@ -587,9 +581,3 @@ class DoubleIntegrator(gym.Env):
         state_not_norm = state_no_time * mask + state_time * (1 - mask)
 
         return state_not_norm
-
-    def seed(self, seed=None):
-        ''' Generate a random number generator from seed '''
-        self.np_random, seed = seeding.np_random(seed)
-
-        return [seed]
