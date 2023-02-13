@@ -1,12 +1,13 @@
 import sys
-import tensorflow as tf
-from tensorflow.keras import layers, regularizers
-from pyomo.environ import *
-from pyomo.dae import *
-from CACTO import CACTO
-import numpy as np
 import math
 import time
+import numpy as np
+import tensorflow as tf
+from pyomo.dae import *
+from pyomo.environ import *
+from tensorflow.keras import layers, regularizers
+from CACTO import CACTO
+
 
 class RL_AC(CACTO):
     def __init__(self, env, conf):
@@ -14,10 +15,10 @@ class RL_AC(CACTO):
 
         return
 
-    # Update both critic and actor                                                                     
     def update(self, episode, red_state_batch_norm, red_state_batch, state_batch_norm, state_batch, reward_batch, state_next_batch, state_next_batch_norm, d_batch, action_batch, weights_batch=None):
+        ''' Update both critic and actor '''
+        # Update the critic
         with tf.GradientTape() as tape:
-            # Update the critic
             if self.conf.SOBOLEV:
                 if self.conf.NORMALIZE_INPUTS:
                     with tf.GradientTape() as tape3:
@@ -115,15 +116,17 @@ class RL_AC(CACTO):
             
             # Gradients of the actor loss w.r.t. actor's parameters
             actor_grad = tape.gradient(mean_Qneg, CACTO.actor_model.trainable_variables) 
+
             # Update the actor backpropagating the gradients
             CACTO.actor_optimizer.apply_gradients(zip(actor_grad, CACTO.actor_model.trainable_variables))
 
     @tf.function 
     def update_target(self,target_weights, weights, tau): 
+        ''' Update target critic NN '''
         for (a, b) in zip(target_weights, weights):
             a.assign(b * tau + a * (1 - tau))  
 
-    def learn(self, episode, prioritized_buffer,i):
+    def learn(self, episode, prioritized_buffer):
         # Sample batch of transitions from the buffer
         experience = prioritized_buffer.sample(self.conf.BATCH_SIZE, beta=self.conf.prioritized_replay_eps)            # Bias annealing not performed, that's why beta is equal to a very small number (0 not accepted by PrioritizedReplayBuffer)
         s_batch, a_next_batch, a_batch, r_batch, s_next_batch, d_batch, weights, batch_idxes = experience        # Importance sampling weights (actually not used) should anneal the bias (see Prioritized Experience Replay paper) 
@@ -186,6 +189,7 @@ class RL_AC(CACTO):
         self.update(episode, state_batch_norm, state_batch, state_batch_norm, state_batch, reward_batch, state_next_batch, state_next_batch_norm, d_batch, action_batch, weights_batch=weights_batch)
 
     def RL_Solve(self, state_prev, ep, rand_time, env, tau_TO, prioritized_buffer):
+        ''' Solve RL problem '''
         DONE = 0                              # Flag indicating if the episode has terminated
         ep_return = 0                         # Initialize the return
         step_counter = 0                      # Initialize the counter of episode steps
@@ -193,7 +197,6 @@ class RL_AC(CACTO):
 
         # START RL EPISODE
         while True:
-            tt0 = time.time()
             # Get current and next TO actions
             action, next_TO_action = self.get_TO_actions(step_counter, action_TO=tau_TO)           
 
@@ -209,7 +212,7 @@ class RL_AC(CACTO):
 
             ep_arr.append(rwrd)
 
-            if step_counter==CACTO.NSTEPS_SH-1: ### nell'atro codice è CACTO.NSTEPS_SH ###
+            if step_counter==CACTO.NSTEPS_SH-1:
                 DONE = 1
 
             # Store transition if you want to use 1-step TD
@@ -240,7 +243,7 @@ class RL_AC(CACTO):
                         state_next_rollout = CACTO.state_arr[final_i,:] / self.conf.state_norm_arr
                         state_next_rollout[-1] = 2*state_next_rollout[-1] - 1
                     else:
-                        state_next_rollout = CACTO.state_arr[final_i,:] / self.conf.state_norm_arr
+                        state_next_rollout = CACTO.state_arr[final_i,:]
                     tf_state_next_rollout = tf.expand_dims(tf.convert_to_tensor(state_next_rollout), 0)
                     V_final = CACTO.target_critic(tf_state_next_rollout, training=False).numpy()[0][0]
                 cost_to_go = sum(ep_arr[i:final_i+1]) + V_final
@@ -253,14 +256,13 @@ class RL_AC(CACTO):
         # Update the NNs
         if ep>=self.conf.ep_no_update and ep%self.conf.EP_UPDATE==0:
             for i in range(self.conf.UPDATE_LOOPS):
-                self.learn(ep, prioritized_buffer,i)  
+                self.learn(ep, prioritized_buffer)  
                 self.update_target(CACTO.target_critic.variables, CACTO.critic_model.variables, self.conf.UPDATE_RATE)    # Update target critic
                 self.conf.update_step_counter += 1
         return self.conf.update_step_counter, ep_return
 
-    # Get optimal actions at timestep "step" in the current episode
     def get_TO_actions(self, step, action_TO=None):
-
+        ''' Get optimal actions at timestep "step" in the current episode '''
         actions = action_TO[step,:]
  
         # Buond actions in case they are not already bounded in the TO problem

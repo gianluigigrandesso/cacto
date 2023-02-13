@@ -1,10 +1,10 @@
-import tensorflow as tf
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.patches import Ellipse
 import math
-from pyomo.environ import *
+import numpy as np
+import tensorflow as tf
+import matplotlib.pyplot as plt
 from pyomo.dae import *
+from pyomo.environ import *
+from matplotlib.patches import Ellipse
 
 class PLOT():
     def __init__(self, env, conf):
@@ -18,10 +18,8 @@ class PLOT():
 
         return 
 
-    #@tf.function
-
-    # Plot policy rollout from a single initial state as well as state and control trajectories
     def plot_policy(self, tau, x, y, steps, n_updates, diff_loc=0, PRETRAIN=0):
+        ''' Plot policy rollout from a single initial state as well as state and control trajectories '''
         timesteps = self.conf.dt*np.arange(steps)
         fig = plt.figure(figsize=(12,8))
         plt.suptitle('POLICY: Discrete model, N try = {} N updates = {}'.format(self.conf.N_try,n_updates), y=1, fontsize=20)
@@ -55,9 +53,7 @@ class PLOT():
         ax3.plot(x, y, 'ro', linewidth=1, markersize=1) 
         ax3.add_artist(ell1)
         ax3.add_artist(ell2) 
-        ax3.add_artist(ell3) 
-
-        #ax3.plot([conf.x_base],[3*conf.l],'ko',markersize=5)   
+        ax3.add_artist(ell3)  
 
         ax3.plot([self.conf.TARGET_STATE[0]],[self.conf.TARGET_STATE[1]],'b*',markersize=10) 
         ax3.set_xlim([-41, 31])
@@ -80,9 +76,8 @@ class PLOT():
         plt.clf()
         plt.close(fig)
 
-    # Plot only policy rollouts from multiple initial states
     def plot_policy_eval(self,x_list,y_list,n_updates, diff_loc=0, PRETRAIN=0):
-
+        ''' Plot only policy rollouts from multiple initial states '''
         fig = plt.figure(figsize=(12,8))
         plt.suptitle('POLICY: Discrete model, N try = {} N updates = {}'.format(self.conf.N_try,n_updates), y=1, fontsize=20)
         ell1 = Ellipse((self.conf.XC1, self.conf.YC1), self.conf.A1, self.conf.B1, 0.0)
@@ -135,9 +130,8 @@ class PLOT():
         plt.clf()
         plt.close(fig)
 
-    # Plot rollout of the actor from some initial states. It generates the results and then calls plot_policy() and plot_policy_eval()
     def rollout(self,update_step_cntr, actor_model, env, rand_time, init_states_sim, diff_loc=0, PRETRAIN=0):
-
+        ''' Plot rollout of the actor from some initial states. It generates the results and then calls plot_policy() and plot_policy_eval() '''
         tau_all_sim = np.empty((len(init_states_sim)*(self.conf.NSTEPS),self.conf.robot.na))
         x_ee_all_sim = []
         y_ee_all_sim = []
@@ -189,11 +183,9 @@ class PLOT():
 
         return  tau_all_sim, x_ee_all_sim, y_ee_all_sim
 
-    # Plot results from TO and episode to check consistency
     def plot_results(self,tau, x_TO,y_TO,x_RL,y_RL,steps,to=0):
-
+        ''' Plot results from TO and episode to check consistency '''
         timesteps = self.conf.dt*np.arange(steps+1)
-        timesteps2 = self.conf.dt*np.arange(steps)
         fig = plt.figure(figsize=(12,8))
         if to:
             plt.suptitle('TO EXPLORATION: N try = {}'.format(self.confN_try), y=1, fontsize=20)
@@ -248,8 +240,8 @@ class PLOT():
         fig.tight_layout()
         plt.show()
 
-    # Plot returns (not so meaningful given that the initial state, so also the time horizon, of each episode is randomized)
     def plot_Return(self, ep_reward_list):
+        ''' Plot returns (not so meaningful given that the initial state, so also the time horizon, of each episode is randomized) '''
         fig = plt.figure(figsize=(15,8))
         ax = fig.add_subplot(1, 1, 1)    
         ax.plot(ep_reward_list)
@@ -260,8 +252,8 @@ class PLOT():
         plt.savefig(self.conf.Fig_path+'/EpReturn_{}'.format(self.conf.N_try))
         plt.close()
 
-    # Plot average return considering 40 episodes 
     def plot_AvgReturn(self, avg_reward_list):
+        ''' Plot average return considering 40 episodes '''
         fig = plt.figure(figsize=(15,8))
         ax = fig.add_subplot(1, 1, 1)
         ax.plot(avg_reward_list)

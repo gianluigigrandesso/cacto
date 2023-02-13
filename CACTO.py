@@ -1,9 +1,9 @@
 import sys
-import tensorflow as tf
-from tensorflow.keras import layers, regularizers
-from pyomo.environ import *
-from pyomo.dae import *
 import numpy as np
+import tensorflow as tf
+from pyomo.dae import *
+from pyomo.environ import *
+from tensorflow.keras import layers, regularizers
    
 class CACTO():
     ''' 
@@ -80,17 +80,9 @@ class CACTO():
         self.conf = conf
 
         return
-
-    # Update target critic NN
-    # Eager execution is turned on by default in TensorFlow 2. Decorating with tf.function allows TensorFlow to build a static graph out of the logic and computations in our function.
-    # This provides a large speed up for blocks of code that contain many small TensorFlow operations such as this one. Working only with TensorFlow tensors (e.g. not working with Numpy arrays)
-    #@tf.function  
-    def update_target(self,target_weights, weights, tau): 
-        for (a, b) in zip(target_weights, weights):
-            a.assign(b * tau + a * (1 - tau))  
-            
-    # Create actor NN 
+             
     def get_actor(self):
+        ''' Create actor NN '''
         inputs = layers.Input(shape=(self.conf.nb_state,))
         
         lay1 = layers.Dense(self.conf.NH1,kernel_regularizer=regularizers.l1_l2(self.conf.wreg_l1_A,self.conf.wreg_l2_A),bias_regularizer=regularizers.l1_l2(self.conf.wreg_l1_A,self.conf.wreg_l2_A))(inputs)                                        
@@ -103,10 +95,11 @@ class CACTO():
         outputs = outputs * self.conf.u_max          # Bound actions
         
         model = tf.keras.Model(inputs, outputs)
+        
         return model 
-
-    # Create critic NN 
+ 
     def get_critic(self): 
+        ''' Create critic NN '''
         state_input = layers.Input(shape=(self.conf.nb_state,))
         
         state_out1 = layers.Dense(16, kernel_regularizer=regularizers.l1_l2(self.conf.wreg_l1_C,self.conf.wreg_l2_C),bias_regularizer=regularizers.l1_l2(self.conf.wreg_l1_C,self.conf.wreg_l2_C))(state_input) 
@@ -124,10 +117,11 @@ class CACTO():
         outputs = layers.Dense(1, kernel_regularizer=regularizers.l1_l2(self.conf.wreg_l1_C,self.conf.wreg_l2_C),bias_regularizer=regularizers.l1_l2(self.conf.wreg_l1_C,self.conf.wreg_l2_C))(leakyrelu4)
         
         model = tf.keras.Model([state_input], outputs)
+
         return model    
     
-    # Setup RL model #
     def setup_model(self):
+        ''' Setup RL model '''
         # Create actor, critic and target NNs
         CACTO.actor_model = self.get_actor()
         CACTO.critic_model = self.get_critic()

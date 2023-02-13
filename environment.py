@@ -49,7 +49,8 @@ class Manipulator(gym.Env):
     
     def reset(self, options=None):
         ''' Choose initial state uniformly at random '''
-        self._state = np.zeros(self.conf.nb_state)        
+        self._state = np.zeros(self.conf.nb_state) 
+
         rand_time = random.uniform(self.conf.x_init_min[-1], self.conf.x_init_max[-1])
         for i in range(self.conf.nb_state-1): 
             self._state[i] = random.uniform(self.conf.x_init_min[i], self.conf.x_init_max[i]) 
@@ -292,6 +293,7 @@ class Manipulator(gym.Env):
         state_no_time = state * self.conf.state_norm_arr
         mask = tf.cast(tf.stack([np.ones(BATCH_SIZE), np.ones(BATCH_SIZE), np.ones(BATCH_SIZE), np.ones(BATCH_SIZE), np.ones(BATCH_SIZE), np.ones(BATCH_SIZE), np.zeros(BATCH_SIZE)],1),tf.float32)
         state_not_norm = state_no_time * mask + state_time * (1 - mask)
+
         return state_not_norm
     
 
@@ -338,7 +340,8 @@ class DoubleIntegrator(gym.Env):
     
     def reset(self, options=None):
         ''' Choose initial state uniformly at random '''
-        self._state = np.zeros(self.conf.nb_state)     
+        self._state = np.zeros(self.conf.nb_state)    
+
         rand_time = random.uniform(self.conf.x_init_min[-1], self.conf.x_init_max[-1]) 
         for i in range(self.conf.nb_state-1): 
             self._state[i] = random.uniform(self.conf.x_init_min[i], self.conf.x_init_max[i]) 
@@ -418,13 +421,7 @@ class DoubleIntegrator(gym.Env):
         # Term pushing the agent to stay in the neighborhood of target
         peak_reward = math.log(math.exp(alpha2*-(math.sqrt((x_ee-TARGET_STATE[0])**2 +0.1) - math.sqrt(0.1) - 0.1 + math.sqrt((y_ee-TARGET_STATE[1])**2 +0.1) - math.sqrt(0.1) - 0.1)) + 1)/alpha2
 
-        # Term penalizing the FINAL joint velocity
-        if state_next[-1] == self.conf.dt*round(rand_time/self.conf.dt):
-            vel_joint = state_next[nq:nx].dot(state_next[nq:nx]) - 10000/w_v
-        else:    
-            vel_joint = 0
-
-        r = (w_d*(-(x_ee-TARGET_STATE[0])**2 -(y_ee-TARGET_STATE[1])**2) + w_peak*peak_reward - w_v*vel_joint - w_ob1*ell1_pen - w_ob2*ell2_pen - w_ob3*ell3_pen - w_u*(action.dot(action)) + 10000)/100 
+        r = (w_d*(-(x_ee-TARGET_STATE[0])**2 -(y_ee-TARGET_STATE[1])**2) + w_peak*peak_reward - w_ob1*ell1_pen - w_ob2*ell2_pen - w_ob3*ell3_pen - w_u*(action.dot(action)) + 10000)/100 
 
         return r
 
@@ -559,14 +556,14 @@ class DoubleIntegrator(gym.Env):
 
     def simulate_tf(self,state,action):
         ''' Simulate dynamics using tensors. Batch-wise computation '''
-        q0_next  = state[:,0] + self.conf.dt*state[:,2] + 0.5*action[:,0]*self.conf.dt**2
-        q1_next  = state[:,1] + self.conf.dt*state[:,3] + 0.5*action[:,1]*self.conf.dt**2
+        q0_next = state[:,0] + self.conf.dt*state[:,2] + 0.5*action[:,0]*self.conf.dt**2
+        q1_next = state[:,1] + self.conf.dt*state[:,3] + 0.5*action[:,1]*self.conf.dt**2
         v0_next = state[:,2] + self.conf.dt*action[:,0]
         v1_next = state[:,3] + self.conf.dt*action[:,1]
         t_next  = state[:,-1]+ self.conf.dt
         if self.conf.NORMALIZE_INPUTS:
-            q0_next = q0_next   / self.conf.state_norm_arr[0]
-            q1_next = q1_next   / self.conf.state_norm_arr[1]
+            q0_next = q0_next / self.conf.state_norm_arr[0]
+            q1_next = q1_next / self.conf.state_norm_arr[1]
             v0_next = v0_next / self.conf.state_norm_arr[2]
             v1_next = v1_next / self.conf.state_norm_arr[3]
             t_next = 2*t_next / self.conf.state_norm_arr[-1] -1  

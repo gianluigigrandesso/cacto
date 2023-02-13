@@ -1,15 +1,15 @@
 import sys
-import tensorflow as tf
-from tensorflow.keras import layers, regularizers
-from pyomo.environ import *
-from pyomo.dae import *
-from inits import init_tau, init_x, init_x_ICS, init_0
-from CACTO import CACTO
-import numpy as np
-import random
 import math
 import time
-       
+import random
+import numpy as np
+import tensorflow as tf
+from pyomo.dae import *
+from pyomo.environ import *
+from tensorflow.keras import layers, regularizers
+from CACTO import CACTO
+from inits import init_action, init_state, init_state_ICS, init_0
+
 class TO_Pyomo(CACTO):
     '''
     :system_id:                  (str) Id system
@@ -22,9 +22,8 @@ class TO_Pyomo(CACTO):
 
         return
 
-    # Create TO problem
     def TO_Manipulator_Model(self,ICS, init_q0, init_q1, init_q2, init_v0, init_v1, init_v2, init_a0, init_a1, init_a2, init_tau0, init_tau1, init_tau2, N, init_TO=None):
-
+        ''' Create TO pyomo model - manipulator '''
         m = ConcreteModel()
         m.k = RangeSet(0, N)
 
@@ -143,15 +142,15 @@ class TO_Pyomo(CACTO):
         return m
 
     def TO_Manipulator_Solve(self, ep, state_prev, init_TO_controls, init_TO_states):
-        # Create TO problem                   
+        ''' Solve TO problem - manipulator '''                   
         if ep < self.conf.EPISODE_CRITIC_PRETRAINING or ep < self.conf.EPISODE_ICS_INIT:
-            TO_mdl = self.TO_Manipulator_Model(state_prev, init_x_ICS, init_x_ICS, init_x_ICS, init_x_ICS, init_0, init_0, init_0, init_0, CACTO.NSTEPS_SH)
+            TO_mdl = self.TO_Manipulator_Model(state_prev, init_state_ICS, init_state_ICS, init_state_ICS, init_state_ICS, init_0, init_0, init_0, init_0, CACTO.NSTEPS_SH)
         else:
             if ep == self.conf.EPISODE_ICS_INIT and self.conf.LR_SCHEDULE:  
                 # Re-initialize Adam otherwise it keeps being affected by the estimates of first-order and second-order moments computed previously with ICS warm-starting
                 CACTO.critic_optimizer = tf.keras.optimizers.Adam(CACTO.CRITIC_LR_SCHEDULE)     
                 CACTO.actor_optimizer = tf.keras.optimizers.Adam(CACTO.ACTOR_LR_SCHEDULE)
-            TO_mdl = self.TO_Manipulator_Model(state_prev, init_x, init_x, init_x, init_x, init_x, init_x, init_0, init_0, init_0, init_tau, init_tau, init_tau, CACTO.NSTEPS_SH, init_TO = [init_TO_controls, init_TO_states])
+            TO_mdl = self.TO_Manipulator_Model(state_prev, init_state, init_state, init_state, init_state, init_state, init_state, init_0, init_0, init_0, init_action, init_action, init_action, CACTO.NSTEPS_SH, init_TO = [init_TO_controls, init_TO_states])
             
         # Indexes of TO variables       
         K = np.array([k for k in TO_mdl.k]) 
@@ -183,11 +182,14 @@ class TO_Pyomo(CACTO):
 
                 raise Exception()         
         except:
+            tau_TO = None  
+            TO = 0
             print("*** TO failed ***")  
         
         return TO, tau_TO
 
     def TO_DoubleIntegrator_Model(self,ICS, init_q0, init_q1, init_v0, init_v1, init_a0, init_a1, init_tau0, init_tau1, N, init_TO=None):
+        ''' Create TO pyomo model - double integrator '''
         m = ConcreteModel()
         m.k = RangeSet(0, N)
         
@@ -208,8 +210,8 @@ class TO_Pyomo(CACTO):
             m.v0 = Var(m.k, initialize=init_v0(m,m.k,2,ICS))
             m.v1 = Var(m.k, initialize=init_v1(m,m.k,3,ICS))
         
-        #m.a0 = Var(m.k, initialize=init_a0)
-        #m.a1 = Var(m.k, initialize=init_a1)
+        m.a0 = Var(m.k, initialize=init_a0)
+        m.a1 = Var(m.k, initialize=init_a1)
 
         m.icfix_q0 = Constraint(rule = lambda m: m.q0[0] == ICS[0])
         m.icfix_q1 = Constraint(rule = lambda m: m.q1[0] == ICS[1])
@@ -217,16 +219,16 @@ class TO_Pyomo(CACTO):
         m.icfix_v1 = Constraint(rule = lambda m: m.v1[0] == ICS[3])        
 
         m.v0_update = Constraint(m.k, rule = lambda m, k:
-           m.v0[k+1] == m.v0[k] + self.conf.dt*m.tau0[k] if k < N else Constraint.Skip)
+           m.v0[k+1] == m.v0[k] + self.conf.dt*m.a0[k] if k < N else Constraint.Skip)
 
         m.v1_update = Constraint(m.k, rule = lambda m, k:
-           m.v1[k+1] == m.v1[k] + self.conf.dt*m.tau1[k] if k < N else Constraint.Skip)
+           m.v1[k+1] == m.v1[k] + self.conf.dt*m.a1[k] if k < N else Constraint.Skip)
 
         m.q0_update = Constraint(m.k, rule = lambda m, k:
-           m.q0[k+1] == m.q0[k] + self.conf.dt*m.v0[k] + self.conf.dt**2*m.tau0[k]/2 if k < N else Constraint.Skip) ### m.q0[k] + self.conf.dt*m.v0[k] !!! nel manipolatore non ho il temine delle accelerazioni
+           m.q0[k+1] == m.q0[k] + self.conf.dt*m.v0[k] + self.conf.dt**2*m.a0[k]/2 if k < N else Constraint.Skip)
 
         m.q1_update = Constraint(m.k, rule = lambda m, k:
-           m.q1[k+1] == m.q1[k] + self.conf.dt*m.v1[k] + self.conf.dt**2*m.tau1[k]/2 if k < N else Constraint.Skip) ### m.q1[k] + self.conf.dt*m.v1[k] !!! nel manipolatore non ho il temine delle accelerazioni
+           m.q1[k+1] == m.q1[k] + self.conf.dt*m.v1[k] + self.conf.dt**2*m.a1[k]/2 if k < N else Constraint.Skip)
 
         #rename reward parameters
         alpha = self.conf.soft_max_param[0]
@@ -270,15 +272,15 @@ class TO_Pyomo(CACTO):
         return m
 
     def TO_DoubleIntegrator_Solve(self, ep, state_prev, init_TO_controls, init_TO_states):
-        # Create TO problem               
+        ''' Solve TO problem - double integrator '''               
         if ep < self.conf.EPISODE_CRITIC_PRETRAINING or ep < self.conf.EPISODE_ICS_INIT:
-            TO_mdl = self.TO_DoubleIntegrator_Model(state_prev, init_x_ICS, init_x_ICS, init_x_ICS, init_x_ICS, init_0, init_0, init_0, init_0, CACTO.NSTEPS_SH)
+            TO_mdl = self.TO_DoubleIntegrator_Model(state_prev, init_state_ICS, init_state_ICS, init_state_ICS, init_state_ICS, init_0, init_0, init_0, init_0, CACTO.NSTEPS_SH)
         else:
             if ep == self.conf.EPISODE_ICS_INIT and self.conf.LR_SCHEDULE:  
                 # Re-initialize Adam otherwise it keeps being affected by the estimates of first-order and second-order moments computed previously with ICS warm-starting
                 CACTO.critic_optimizer = tf.keras.optimizers.Adam(CACTO.CRITIC_LR_SCHEDULE)     
                 CACTO.actor_optimizer = tf.keras.optimizers.Adam(CACTO.ACTOR_LR_SCHEDULE)
-            TO_mdl = self.TO_DoubleIntegrator_Model(state_prev, init_x, init_x, init_x, init_x, init_0, init_0, init_tau, init_tau, CACTO.NSTEPS_SH, init_TO = [init_TO_controls, init_TO_states])
+            TO_mdl = self.TO_DoubleIntegrator_Model(state_prev, init_state, init_state, init_state, init_state, init_0, init_0, init_action, init_action, CACTO.NSTEPS_SH, init_TO = [init_TO_controls, init_TO_states])
             
         # Indexes of TO variables       
         K = np.array([k for k in TO_mdl.k]) 
@@ -309,12 +311,15 @@ class TO_Pyomo(CACTO):
                             
                 raise Exception()         
         except:
+            tau_TO = None  
+            TO = 0
             print("*** TO failed ***")  
         
         return TO, tau_TO
 
 
     def TO_Solve(self, ep, env):
+        ''' Create TO problem '''
         TO = 0             # Flag to indicate if the TO problem has been solved
 
         # START TO PROBLEM 
@@ -342,17 +347,19 @@ class TO_Pyomo(CACTO):
             # Actor rollout used to initialize TO state and control variables
             init_TO_states = np.zeros((self.conf.nb_state, CACTO.NSTEPS_SH+1))
             for i in range(self.conf.robot.nq+self.conf.robot.nv):
-                init_TO_states[i][0] = state_prev[i]                    
+                init_TO_states[i][0] = state_prev[i]     
+
             init_TO_controls = np.zeros((self.conf.nb_action, CACTO.NSTEPS_SH+1))
             for i in range(self.conf.robot.na):
-                init_TO_controls[i][0] = tf.squeeze(CACTO.actor_model(tf_state_prev)).numpy()[i] #####
+                init_TO_controls[i][0] = tf.squeeze(CACTO.actor_model(tf_state_prev)).numpy()[i]
+
             init_state_prev = np.copy(state_prev)
             
             # Simulate actor's actions to compute the state trajectory used to initialize TO state variables
             for i in range(1, CACTO.NSTEPS_SH+1):    
                 init_TO_controls_sim = np.empty(self.conf.nb_action)
                 for j in range(self.conf.nb_action):
-                    init_TO_controls_sim[j] = init_TO_controls[j][i-1] #####                                                                                                                               
+                    init_TO_controls_sim[j] = init_TO_controls[j][i-1]                                                                                                                            
                 init_next_state =  env.simulate(init_state_prev,init_TO_controls_sim)
 
                 for j in range(self.conf.robot.nv + self.conf.robot.nq):
@@ -364,7 +371,7 @@ class TO_Pyomo(CACTO):
                 else:    
                     init_tf_next_state = tf.expand_dims(tf.convert_to_tensor(init_next_state), 0)  
                 for j in range(self.conf.robot.na):      
-                    init_TO_controls[j][i] = tf.squeeze(CACTO.actor_model(init_tf_next_state)).numpy()[j] #####
+                    init_TO_controls[j][i] = tf.squeeze(CACTO.actor_model(init_tf_next_state)).numpy()[j] 
                 
                 init_state_prev = np.copy(init_next_state)
             
@@ -375,8 +382,10 @@ class TO_Pyomo(CACTO):
                 TO, tau_TO = self.TO_Manipulator_Solve(ep, state_prev, init_TO_controls, init_TO_states)
             else:
                 print('Pyomo {} model not found'.format(self.system_id))
+
             # Plot TO solution    
-            # plot_results_TO(TO_mdl)   
+            # plot_results_TO(TO_mdl)  
+             
         return rand_time, state_prev, tau_TO       
      
 

@@ -1,7 +1,7 @@
-import numpy as np
-import math
-from robot_utils import RobotWrapper, RobotSimulator
 import os
+import math
+import numpy as np
+from robot_utils import RobotWrapper, RobotSimulator
 
 ''' CACTO parameters '''
 ep_no_update = 10                                                                                           # Episodes to wait before starting to update the NNs
@@ -16,7 +16,7 @@ REPLAY_SIZE = 2**15                                                             
 BATCH_SIZE = 128                                                                                            # Size of the mini-batch 
 
 log_rollout_interval = 100                                                                                  # plot.rollout() interval
-log_interval = 200                                                                                          # Log interval
+log_interval = 500                                                                                          # Log interval
 
 NH1 = 256                                                                                                   # 1st hidden layer size
 NH2 = 256                                                                                                   # 2nd hidden layer size  
@@ -170,7 +170,7 @@ init_states_sim = [np.array([2.0,0.0,0.0,0.0,0.0]),
                    np.array([15.0,0.0,0.0,0.0,0.0])]
 
 # Action parameters
-nb_action = robot.na                                                                                               # Action size
+nb_action = robot.na                                                                                        # Action size
 tau_lower_bound = -2                                                                                        # Action lower bound
 tau_upper_bound = 2                                                                                         # Action upper bound
 u_min = tau_lower_bound*np.ones(nb_action)                                                                  # Action lower bound vector

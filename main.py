@@ -1,20 +1,21 @@
 import os
 import sys
+import time
+import math
+import random
 import argparse
+import numpy as np
 import tensorflow as tf
-from tensorflow.keras import layers, regularizers
-from pyomo.environ import *
+import matplotlib.pyplot as plt
 from pyomo.dae import *
+from pyomo.environ import *
+from tensorflow.keras import layers, regularizers
 from replay_buffer import PrioritizedReplayBuffer
+from RL import RL_AC 
 from plot import PLOT
 from CACTO import CACTO
 from TO import TO_Pyomo, TO_Casadi
-from RL import RL_AC 
-import numpy as np
-import random
-import time
-import math
-import matplotlib.pyplot as plt
+
 
 def run(**kwargs):
 
@@ -136,8 +137,8 @@ def run(**kwargs):
         update_step_counter, ep_return = RLAC.RL_Solve(prev_state, ep, rand_time, env, tau_TO, prioritized_buffer)
 
         # Plot rollouts every conf.log_rollout_interval-training episodes (saved in a separate folder)
-        #if ep >= conf.ep_no_update and ep%conf.log_rollout_interval==0:
-        #    _, _, _ = plot_fun.rollout(update_step_counter, CACTO.actor_model, env, rand_time, conf.init_states_sim, diff_loc=1)     
+        # if ep >= conf.ep_no_update and ep%conf.log_rollout_interval==0:
+        #     _, _, _ = plot_fun.rollout(update_step_counter, CACTO.actor_model, env, rand_time, conf.init_states_sim, diff_loc=1)     
 
         # Plot rollouts and save the NNs every conf.log_rollout_interval-training episodes
         if ep >= conf.ep_no_update and ep%conf.log_interval==0: 
@@ -156,8 +157,8 @@ def run(**kwargs):
     print('Elapsed time: ', time_end-time_start)
 
     # Plot returns
-    #plot_fun.plot_AvgReturn(avg_reward_list)
-    #plot_fun.plot_Return(ep_reward_list)
+    # plot_fun.plot_AvgReturn(avg_reward_list)
+    # plot_fun.plot_Return(ep_reward_list)
 
     # Save networks at the end of the training
     CACTO.actor_model.save_weights(conf.NNs_path+"/actor_final.h5")
@@ -169,7 +170,7 @@ def run(**kwargs):
 
 def parse_args():
     """
-    parse the arguments for DDPG training
+    parse the arguments for CACTO training
 
     :return: (dict) the arguments
     """

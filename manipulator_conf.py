@@ -1,7 +1,7 @@
-import numpy as np
-import math
-from robot_utils import RobotWrapper, RobotSimulator
 import os
+import math
+import numpy as np
+from robot_utils import RobotWrapper, RobotSimulator
 
 ''' CACTO parameters '''
 ep_no_update = 0                                                                                            # Episodes to wait before starting to update the NNs
@@ -67,7 +67,7 @@ wreg_l1_C = 1e-2                                                                
 wreg_l2_C = 1e-2                                                                                            # Weight of L2 regularization in critic's network
 
 SOBOLEV = 0 
-wd = 5e-1                                                                                                   # Derivative-related loss weight
+wd = 0                                                                                                      # Derivative-related loss weight
 
 # Set TD_N ONLY is SOBOLEV not used
 if SOBOLEV == 1:
