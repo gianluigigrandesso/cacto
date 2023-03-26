@@ -229,7 +229,7 @@ def reward(x2,u=None):
     peak_reward = math.log(math.exp(conf.alpha2*-(math.sqrt((x_ee-conf.TARGET_STATE[0])**2 +0.1) - math.sqrt(0.1) - 0.1 + math.sqrt((y_ee-conf.TARGET_STATE[1])**2 +0.1) - math.sqrt(0.1) - 0.1)) + 1)/conf.alpha2
 
     # Term penalizing the FINAL joint velocity
-    if x2[-1] == conf.dt*round(rand_time/conf.dt):
+    if x2[-1] == conf.dt*conf.NSTEPS:
         vel_joint = x2[3]**2 + x2[4]**2 + x2[5]**2 - 10000/conf.w_v
     else:    
         vel_joint = 0
@@ -881,10 +881,11 @@ if __name__ == "__main__":
                 prioritized_buffer.add(np.array([q0_arr[i],q1_arr[i],q2_arr[i],v0_arr[i],v1_arr[i],v2_arr[i],t_arr[i]]), next_TO_action, action, cost_to_go_arr[i], np.array([0.0,0.0,0.0,0.0,0.0,0.0,0.0]), float(DONE))
 
         # Update the NNs
-        for i in range(conf.UPDATE_LOOPS):
-            training.learn(ep, prioritized_buffer)                                         # Update critic and actor
-            update_target(target_critic.variables, critic_model.variables, conf.UPDATE_RATE)    # Update target critic
-            update_step_counter += 1
+        if ep % conf.EP_UPDATE == 0:
+            for i in range(conf.UPDATE_LOOPS):
+                training.learn(ep, prioritized_buffer)                                         # Update critic and actor
+                update_target(target_critic.variables, critic_model.variables, conf.UPDATE_RATE)    # Update target critic
+                update_step_counter += 1
 
         # Plot rollouts every 0.5% of the training (saved in a separate folder)
         if ep>=conf.ep_no_update and ep%int((conf.NEPISODES-conf.ep_no_update)/200)==0:
