@@ -2,7 +2,7 @@ import numpy as np
 import random
 import math
 
-from segment_tree import SumSegmentTree, MinSegmentTree
+from stable_baselines.common.segment_tree import SumSegmentTree, MinSegmentTree
 
 
 class ReplayBuffer(object):
@@ -33,7 +33,7 @@ class ReplayBuffer(object):
     def _encode_sample(self, idxes):
         obses_t, actions_pol, actions_expl, rewards, obses_tp1, dones = [], [], [], [], [], []
         for i in idxes:
-            data = self._storage[i]
+            data = self._storage[int(i)]
             obs_t, action_pol, action_expl, reward, obs_tp1, done = data
             obses_t.append(np.array(obs_t, copy=False))
             actions_pol.append(np.array(action_pol, copy=False))
