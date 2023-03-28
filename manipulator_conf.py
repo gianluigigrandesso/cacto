@@ -6,7 +6,7 @@ from robot_utils import RobotWrapper, RobotSimulator
 ''' CACTO parameters '''
 ep_no_update = 0                                                                                            # Episodes to wait before starting to update the NNs
 NEPISODES = 50000+ep_no_update                                                                              # Max training episodes
-EP_UPDATE = 1                                                                                               # Number of episodes before updating critic and actor
+EP_UPDATE = 25                                                                                              # Number of episodes before updating critic and actor
 NSTEPS = 100                                                                                                # Max episode length
 CRITIC_LEARNING_RATE = 0.001                                                                                # Learning rate for the critic network
 ACTOR_LEARNING_RATE = 0.0005                                                                                # Learning rate for the policy network
@@ -16,7 +16,7 @@ REPLAY_SIZE = 2**15                                                             
 BATCH_SIZE = 64                                                                                             # Size of the mini-batch 
 
 log_rollout_interval = 100                                                                                  # plot.rollout() interval
-log_interval = 500                                                                                          # Log interval
+log_interval = 1000                                                                                         # Log interval
 
 NH1 = 256                                                                                                   # 1st hidden layer size
 NH2 = 256                                                                                                   # 2nd hidden layer size  
@@ -69,12 +69,10 @@ wreg_l2_C = 1e-2                                                                
 SOBOLEV = 0 
 wd = 0                                                                                                      # Derivative-related loss weight
 
-# Set TD_N ONLY is SOBOLEV not used
+# Set n_steps_TD_N ONLY is SOBOLEV not used
 if SOBOLEV == 1:
-    TD_N = 0
     nsteps_TD_N = 0
-else:
-    TD_N = 1                                                                                                # Flag to use n-step TD rather than 1-step TD
+else:                                                                                             # Flag to use n-step TD rather than 1-step TD
     nsteps_TD_N = 1                                                                                         # Number of lookahed steps
 
 
@@ -122,9 +120,8 @@ TARGET_STATE = np.array([x_des,y_des])                                          
 
 
 ''' Path parameters '''
-N_try = 1                                                                                                   # Id test
-Fig_path = './Results/Figures/Manipulator/N_try_{}'.format(N_try)                                           # Figure path
-NNs_path = './Results/NNs/Manipulator/N_try_{}'.format(N_try)                                               # NNs path
+Fig_path = './Results/Figures/Manipulator'                                                                  # Figure path
+NNs_path = './Results/NNs/Manipulator'                                                                      # NNs path
 Config_path = './Results/Configs/Manipulator/'                                                              # Configuration path
 Log_path = './Log//Manipulator'                                                                             # Log path
 
@@ -178,3 +175,5 @@ tau_lower_bound = -200                                                          
 tau_upper_bound = 200                                                                                       # Action upper bound
 u_min = tau_lower_bound*np.ones(nb_action)                                                                  # Action lower bound vector
 u_max = tau_upper_bound*np.ones(nb_action)                                                                  # Action upper bound vector
+
+fig_ax_lim = np.array([[-41, 31], [-35, 35]])                                                               # Figure axis limit [x_min, x_max, y_min, y_max]

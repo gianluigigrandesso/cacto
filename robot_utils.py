@@ -1,13 +1,13 @@
 import os
 import math
+import random
 #import gepetto.corbaserver
 import time
 import subprocess
-import pinocchio as pin
-from pinocchio.robot_wrapper import RobotWrapper as PinocchioRobotWrapper
 import numpy as np
+import pinocchio as pin
 from numpy.linalg import norm
-import random
+from pinocchio.robot_wrapper import RobotWrapper as PinocchioRobotWrapper
 
 class Contact:
     ''' A contact between a contact-point and a contact-surface

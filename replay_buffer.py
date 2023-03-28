@@ -1,7 +1,6 @@
-import numpy as np
-import random
 import math
-
+import random
+import numpy as np
 from stable_baselines.common.segment_tree import SumSegmentTree, MinSegmentTree
 
 
@@ -21,8 +20,8 @@ class ReplayBuffer(object):
     def __len__(self):
         return len(self._storage)
 
-    def add(self, obs_t, action_pol, action_expl, reward, obs_tp1, done):
-        data = (obs_t, action_pol, action_expl, reward, obs_tp1, done)
+    def add(self, obs_t, action_pol, reward, obs_tp1, done):
+        data = (obs_t, action_pol, reward, obs_tp1, done)
 
         if self._next_idx >= len(self._storage):
             self._storage.append(data)
@@ -31,17 +30,16 @@ class ReplayBuffer(object):
         self._next_idx = (self._next_idx + 1) % self._maxsize
 
     def _encode_sample(self, idxes):
-        obses_t, actions_pol, actions_expl, rewards, obses_tp1, dones = [], [], [], [], [], []
+        obses_t, actions_pol, rewards, obses_tp1, dones = [], [], [], [], []
         for i in idxes:
             data = self._storage[int(i)]
-            obs_t, action_pol, action_expl, reward, obs_tp1, done = data
+            obs_t, action_pol, reward, obs_tp1,  done = data
             obses_t.append(np.array(obs_t, copy=False))
             actions_pol.append(np.array(action_pol, copy=False))
-            actions_expl.append(np.array(action_expl, copy=False))
             rewards.append(reward)
             obses_tp1.append(np.array(obs_tp1, copy=False))
             dones.append(done)
-        return np.array(obses_t), np.array(actions_pol), np.array(actions_expl), np.array(rewards), np.array(obses_tp1), np.array(dones)
+        return obses_t, actions_pol, rewards, obses_tp1, dones
 
     def sample(self, batch_size):
         """Sample a batch of experiences.
@@ -51,19 +49,12 @@ class ReplayBuffer(object):
             How many transitions to sample.
         Returns
         -------
-        obs_batch: np.array
-            batch of observations
-        act_batch: np.array
-            batch of actions executed given obs_batch
-        rew_batch: np.array
-            rewards received as results of executing act_batch
-        next_obs_batch: np.array
-            next set of observations seen after executing act_batch
-        done_mask: np.array
-            done_mask[i] = 1 if executing act_batch[i] resulted in
-            the end of an episode and 0 otherwise.
-        TO_mask: np.array
-            TO_mask[i] = 1 if exectuting TO action   
+        obs_batch: batch of observations
+        act_batch: batch of actions executed given obs_batch
+        rew_batch: rewards received as results of executing act_batch
+        next_obs_batch: next set of observations seen after executing act_batch
+        done_mask: done_mask[i] = 1 if executing act_batch[i] resulted in the end of an episode and 0 otherwise.
+        TO_mask: TO_mask[i] = 1 if exectuting TO action   
         """
         idxes = [random.randint(0, len(self._storage) - 1) for _ in range(batch_size)]
         return self._encode_sample(idxes)

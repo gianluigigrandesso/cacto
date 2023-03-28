@@ -74,7 +74,7 @@ if SOBOLEV == 1:
     TD_N = 0
     nsteps_TD_N = 0
 else:
-    TD_N = 0                                                                                                # Flag to use n-step TD rather than 1-step TD
+    TD_N = 1                                                                                                # Flag to use n-step TD rather than 1-step TD
     nsteps_TD_N = 1  
     
 
@@ -121,10 +121,9 @@ TARGET_STATE = np.array([x_des,y_des])                                          
 
 
 
-''' Path parameters '''
-N_try = 1                                                                                                   # Id test
-Fig_path = './Results/Figures/DoubleIntegrator/N_try_{}'.format(N_try)                                      # Figure path
-NNs_path = './Results/NNs/DoubleIntegrator/N_try_{}'.format(N_try)                                          # NNs path
+''' Path parameters '''                                                                                     
+Fig_path = './Results/Figures/DoubleIntegrator'                                                             # Figure path
+NNs_path = './Results/NNs/DoubleIntegrator'                                                                 # NNs path
 Config_path = './Results/Configs/DoubleIntegrator/'                                                         # Configuration path
 Log_path = './Log/DoubleIntegrator/'                                                                        # Log path
 
@@ -175,3 +174,4 @@ tau_upper_bound = 2                                                             
 u_min = tau_lower_bound*np.ones(nb_action)                                                                  # Action lower bound vector
 u_max = tau_upper_bound*np.ones(nb_action)                                                                  # Action upper bound vector
 
+fig_ax_lim = np.array([[-16, 16], [-16, 16]])                                                               # Figure axis limit [x_min, x_max, y_min, y_max]
