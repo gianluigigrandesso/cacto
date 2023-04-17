@@ -7,27 +7,48 @@ import argparse
 import numpy as np
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' # {'0' -> show all logs, '1' -> filter out info, '2' -> filter out warnings}
 import tensorflow as tf
-import matplotlib.pyplot as plt
-from pyomo.dae import *
-from pyomo.environ import *
-from replay_buffer import PrioritizedReplayBuffer, ReplayBuffer
+from multiprocessing import Pool
 from RL import RL_AC 
 from plot import PLOT
-from TO import TO_Pyomo, TO_Casadi
+from NeuralNetwork import NN
+from TO import TO_Pyomo, TO_Casadi 
+from replay_buffer import PrioritizedReplayBuffer, ReplayBuffer
+
+def parse_args():
+    """
+    parse the arguments for CACTO training
+
+    :return: (dict) the arguments
+    """
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+    parser.add_argument('--test-n',                         type=int,   default=0)
+    parser.add_argument('--system-id',                      type=str,   default='manipulator')
+    parser.add_argument('--TO-method',                      type=str,   default='pyomo')
+    parser.add_argument('--seed',                           type=int,   default=123)
+    parser.add_argument('--CPU-flag',                       type=bool,  default=False)
+    args = parser.parse_args()
+    dict_args = vars(args)
+    return dict_args
 
 
-def run(**kwargs):
 
+
+if __name__ == '__main__':
+    args = parse_args()
+    
     ###           Input           ###
-    N_try     = kwargs['test_n']
-    system_id = kwargs['system_id'] 
-    TO_method = kwargs['TO_method']
-    if kwargs['seed'] == None:
+    N_try     = args['test_n']
+    system_id = args['system_id'] 
+    TO_method = args['TO_method']
+    if args['seed'] == None:
         seed = random.randint(1,100000)
         print(seed)
     else:
-        seed = kwargs['seed']
-    CPU_flag = kwargs['CPU_flag'] 
+        seed = args['seed']
+    tf.random.set_seed(seed)  # Set tensorflow seed
+    random.seed(seed)         # Set random seed
+    CPU_flag = args['CPU_flag'] 
     if CPU_flag:
         os.environ["CUDA_VISIBLE_DEVICES"]="-1" # To run TF on CPU rather than GPU 
         #(seems faster since the NNs are small and some gradients are computed with 
@@ -36,7 +57,7 @@ def run(**kwargs):
     ##################################
 
 
-
+    # Import configuration file and environment file
     if system_id == 'manipulator':
         import manipulator_conf as conf
         from environment import Manipulator as Environment
@@ -48,6 +69,8 @@ def run(**kwargs):
     else:
         print('System {} not found'.format(system_id))
         sys.exit()
+
+
 
     # Create folders to store the results and the trained NNs
     try:
@@ -71,6 +94,8 @@ def run(**kwargs):
         print("N try = {} Configs folder already existing".format(N_try))
         pass
 
+
+
     # Save config file
     params = [n for n in conf.__dict__ if not n.startswith("__")]
     f = open(conf.Config_path+'/config{}.txt'.format(N_try), 'w')
@@ -78,15 +103,16 @@ def run(**kwargs):
         f.write('{} = {}\n'.format(p, conf.__dict__[p]))
     f.close()
 
-    # Set seed
-    tf.random.set_seed(seed)  
-    random.seed(seed)
 
-    # Create environment 
+
+    # Create environment instance
     env = Environment(conf)
 
+    # Create NN instance
+    NN_inst = NN(env, conf)
+
     # Create RL_AC instance 
-    RLAC = RL_AC(env, conf)
+    RLAC = RL_AC(env, NN_inst, conf)
     RLAC.setup_model()
 
     # Select TO method and create TO instance
@@ -103,64 +129,82 @@ def run(**kwargs):
 
     # Set initial weights of the NNs and initialize the counter of the updates
     if conf.recover_stopped_training:
-        nb_starting_episode = ((conf.update_step_counter/conf.UPDATE_LOOPS)*conf.EP_UPDATE)+1
+        nb_starting_episode = (conf.update_step_counter/conf.UPDATE_LOOPS)+1
+        update_step_counter = conf.update_step_counter
     else: 
         nb_starting_episode = 0
+        update_step_counter = 0
 
     # Create an empty (prioritized) replay buffer
-    if conf.prioritized_replay_alpha != 0:
-        buffer = ReplayBuffer(conf.REPLAY_SIZE, alpha=conf.prioritized_replay_alpha)   
+    if conf.prioritized_replay_alpha == 0:
+        buffer = ReplayBuffer(conf.REPLAY_SIZE)   
     else:
-        buffer = PrioritizedReplayBuffer(conf.REPLAY_SIZE, alpha=conf.prioritized_replay_alpha)   
+        buffer = PrioritizedReplayBuffer(conf.REPLAY_SIZE, alpha=conf.prioritized_replay_alpha, beta=conf.prioritized_replay_eps)   
 
-    # Lists to store the reward history of each episode and the average reward history of last few episodes
-    ep_reward_list = np.empty(conf.NEPISODES-nb_starting_episode)                                                                                     
-    avg_reward_list = np.empty(conf.NEPISODES-nb_starting_episode)   
+    # Arrays to store the reward history of each episode and the average reward history of last few episodes
+    ep_reward_arr = np.empty(conf.NEPISODES*conf.EP_UPDATE-nb_starting_episode)                                                                                     
+    avg_reward_arr = np.empty(conf.NEPISODES*conf.EP_UPDATE-nb_starting_episode)   
 
-    time_start = time.time()
+    def run_parallel(n=1):
 
-    ### START TRAINING ###
-    for ep in range(nb_starting_episode,conf.NEPISODES): 
-
-        # START TO PROBLEM #
-        success_flag = 0             # Flag to indicate if the TO problem has been solved
+        success_flag = 0                # Flag to indicate if the TO problem has been solved
         while success_flag==0:
+
             # Create initial TO #
             init_rand_state, init_TO_states, init_TO_controls, NSTEPS_SH = RLAC.create_TO_init()
             
             # Solve TO problem #
-            tau_TO, success_flag, x_ee_arr_TO, y_ee_arr_TO = TrOp.TO_Solve(ep, init_rand_state, init_TO_states, init_TO_controls, NSTEPS_SH)
-
-        # START RL PROBLEM # 
-        ep_return, update_step_counter, x_ee_arr_RL, y_ee_arr_RL = RLAC.RL_Solve(ep, tau_TO, buffer)
+            TO_controls, success_flag, x_ee_arr_TO, y_ee_arr_TO = TrOp.TO_Solve(ep, init_rand_state, init_TO_states, init_TO_controls, NSTEPS_SH)
         
-        # Plot the state and control trajectories of this episode
-        # if ep >= conf.ep_no_update and ep%conf.log_rollout_interval==0:
-        #     plot_fun.plot_results(tau_TO, x_ee_arr_TO, y_ee_arr_TO, x_ee_arr_RL, y_ee_arr_RL, NSTEPS_SH, to=success_flag)
+        # Collect experiences 
+        state_arr, partial_cost_to_go_arr, state_next_rollout_arr, done_arr, rwrd_arr, ep_return, x_ee_arr_RL, y_ee_arr_RL  = RLAC.RL_Solve(ep, TO_controls)
+        
+        return NSTEPS_SH, TO_controls, success_flag, x_ee_arr_TO, y_ee_arr_TO, state_arr, partial_cost_to_go_arr, state_next_rollout_arr, done_arr, rwrd_arr, ep_return, x_ee_arr_RL, y_ee_arr_RL
 
-        # Plot rollouts every conf.log_rollout_interval-training episodes (saved in a separate folder)
-        # if ep >= conf.ep_no_update and ep%conf.log_rollout_interval==0:
-        #     _, _, _ = plot_fun.rollout(update_step_counter, RLAC.actor_model, conf.init_states_sim, diff_loc=1)     
+    time_start = time.time()
+
+    ### START TRAINING ###
+    for ep in range(nb_starting_episode, conf.NLOOPS): 
+
+        # Solve TO problem and collect experiences
+        with Pool(conf.nb_cpus) as p: 
+            tmp = p.map(run_parallel,range(conf.EP_UPDATE))
+        NSTEPS_SH, TO_controls, success_flag, x_ee_arr_TO, y_ee_arr_TO, state_arr, partial_cost_to_go_arr, state_next_rollout_arr, done_arr, rwrd_arr, ep_return, x_ee_arr_RL, y_ee_arr_RL = zip(*tmp)
+
+        # Update the buffer
+        for j in range(conf.EP_UPDATE):
+            for i in range(len(rwrd_arr[j])):
+                buffer.add(state_arr[j][i], partial_cost_to_go_arr[j][i], state_next_rollout_arr[j][i], done_arr[j][i])
+       
+        # Update NNs
+        update_step_counter = RLAC.learn_and_update(ep, update_step_counter, buffer)
+        
+        # Plot rollouts and state and control trajectories
+        if ep%conf.plot_rollout_interval_diff_loc==0:
+            plot_fun.rollout(update_step_counter, RLAC.actor_model, conf.init_states_sim, diff_loc=1)
+            #plot_fun.plot_results(TO_controls[-1], x_ee_arr_TO[-1], y_ee_arr_TO[-1], x_ee_arr_RL[-1], y_ee_arr_RL[-1], NSTEPS_SH[-1], to=success_flag)
+        if ep%conf.plot_rollout_interval==0: 
+            plot_fun.rollout(update_step_counter, RLAC.actor_model, conf.init_states_sim)         
 
         # Plot rollouts and save the NNs every conf.log_rollout_interval-training episodes
-        # if ep >= conf.ep_no_update and ep%conf.log_interval==0: 
-        #     _, _, _ = plot_fun.rollout(update_step_counter, RLAC.actor_model, conf.init_states_sim)        
-        #     RLAC.actor_model.save_weights(conf.NNs_path+"/actor_{}.h5".format(update_step_counter))
-        #     RLAC.critic_model.save_weights(conf.NNs_path+"/critic_{}.h5".format(update_step_counter))
-        #     RLAC.target_critic.save_weights(conf.NNs_path+"/target_critic_{}.h5".format(update_step_counter))
- 
-        ep_reward_list[ep] = ep_return
-        avg_reward = np.mean(ep_reward_list[-40:])  # Mean of last 40 episodes
-        avg_reward_list[ep] = avg_reward
+        if ep%conf.save_interval==0:  
+            RLAC.actor_model.save_weights(conf.NNs_path+"/actor_{}.h5".format(update_step_counter))
+            RLAC.critic_model.save_weights(conf.NNs_path+"/critic_{}.h5".format(update_step_counter))
+            RLAC.target_critic.save_weights(conf.NNs_path+"/target_critic_{}.h5".format(update_step_counter))
 
-        print("Episode  {}  --->   Return = {}".format(ep, ep_return))
+        ep_reward_arr[ep*conf.EP_UPDATE:(ep+1)*conf.EP_UPDATE] = ep_return
+        avg_reward = np.mean(ep_reward_arr[-40:])  # Mean of last 40 episodes
+        avg_reward_arr[ep] = avg_reward
 
+        for i in range(conf.EP_UPDATE):
+            print("Episode  {}  --->   Return = {}".format(ep*conf.EP_UPDATE + i, ep_return[i]))
+        
     time_end = time.time()
     print('Elapsed time: ', time_end-time_start)
 
     # Plot returns
-    plot_fun.plot_AvgReturn(avg_reward_list)
-    plot_fun.plot_Return(ep_reward_list)
+    plot_fun.plot_AvgReturn(avg_reward_arr)
+    plot_fun.plot_Return(ep_reward_arr)
 
     # Save networks at the end of the training
     RLAC.actor_model.save_weights(conf.NNs_path+"/actor_final.h5")
@@ -169,27 +213,3 @@ def run(**kwargs):
 
     # Simulate the final policy
     tau_all_final_sim, x_ee_all_final_sim, y_ee_all_final_sim = plot_fun.rollout(update_step_counter, RLAC.actor_model, conf.init_states_sim)
-
-def parse_args():
-    """
-    parse the arguments for CACTO training
-
-    :return: (dict) the arguments
-    """
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-
-    parser.add_argument('--test-n',                         type=int,   default=0)
-    parser.add_argument('--system-id',                      type=str,   default='-')
-    parser.add_argument('--TO-method',                      type=str,   default='pyomo')
-    parser.add_argument('--seed',                           type=int,   default=None)
-    parser.add_argument('--CPU-flag',                       type=bool,  default=False)
-    args = parser.parse_args()
-    dict_args = vars(args)
-    return dict_args
-
-
-
-
-if __name__ == '__main__':
-    args = parse_args()
-    run(**args)

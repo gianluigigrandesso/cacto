@@ -1,4 +1,3 @@
-import sys
 import gym
 import math
 import random
@@ -6,7 +5,6 @@ import numpy as np
 import tensorflow as tf
 import pinocchio as pin
 from gym.spaces import Box
-from gym.utils import seeding
 from utils import *
 
 class Manipulator(gym.Env):
@@ -17,18 +15,16 @@ class Manipulator(gym.Env):
     :param x_init_max :             (float array) State upper bound initial configuration array
     :param x_min :                  (float array) State lower bound vector
     :param x_max :                  (float array) State upper bound vector
-    :param state_norm_arr :         (float array) Array used to normalize states
     :param u_min :                  (float array) Action lower bound array
     :param u_max :                  (float array) Action upper bound array
     :param nb_state :               (int) State size (robot state size + 1)
     :param nb_action :              (int) Action size (robot action size)
     :param dt :                     (float) Timestep
-    :param TARGET_STATE :           (float array) Target position
+    :param self.TARGET_STATE :           (float array) Target position
     :param soft_max_param :         (float array) Soft parameters array
     :param obs_param :              (float array) Obtacle parameters array
     :param weight :                 (float array) Weights array
     :param end_effector_frame_id :  (str)
-    :param NORMALIZE_INPUTS :       (bool)
     '''
 
     metadata = {
@@ -47,7 +43,35 @@ class Manipulator(gym.Env):
 
         self.window = None
         self.clock = None
-    
+
+        #rename reward parameters
+        self.alpha = self.conf.soft_max_param[0]
+        self.alpha2 = self.conf.soft_max_param[1]
+
+        self.XC1 = self.conf.obs_param[0]
+        self.YC1 = self.conf.obs_param[1]
+        self.XC2 = self.conf.obs_param[2]
+        self.YC2 = self.conf.obs_param[3]
+        self.XC3 = self.conf.obs_param[4]
+        self.YC3 = self.conf.obs_param[5]
+        
+        self.A1 = self.conf.obs_param[6]
+        self.B1 = self.conf.obs_param[7]
+        self.A2 = self.conf.obs_param[8]
+        self.B2 = self.conf.obs_param[9]
+        self.A3 = self.conf.obs_param[10]
+        self.B3 = self.conf.obs_param[11]
+
+        self.w_d = self.conf.weight[0]
+        self.w_u = self.conf.weight[1]
+        self.w_peak = self.conf.weight[2]
+        self.w_ob1 = self.conf.weight[3]
+        self.w_ob2 = self.conf.weight[3]
+        self.w_ob3 = self.conf.weight[3]
+        self.w_v = self.conf.weight[4]
+
+        self.TARGET_STATE = self.conf.TARGET_STATE
+
     def reset(self, options=None):
         ''' Choose initial state uniformly at random '''
         state = np.zeros(self.conf.nb_state) 
@@ -65,13 +89,12 @@ class Manipulator(gym.Env):
         state_next = self.simulate(state, action)
 
         # compute reward
-        reward = self.reward(state_next, action)
+        reward = self.reward(state, action)
 
         return (state_next, reward)
     
     def simulate(self, state, action):
         ''' Simulate dynamics '''
-
         nq = self.conf.robot.nq
         nv = self.conf.robot.nv
         nx = nq + nv
@@ -87,64 +110,35 @@ class Manipulator(gym.Env):
 
         return state_next
     
-    def reward(self, state_next, action=None):
+    def reward(self, state, action=None):
         ''' Compute reward '''
-    
         nv = self.conf.robot.nv
         nq = self.conf.robot.nq
         nx = nv + nq
 
         # End-effector coordinates 
-        x_ee = self.conf.x_base + self.conf.l*(math.cos(state_next[0]) + math.cos(state_next[0]+state_next[1]) + math.cos(state_next[0]+state_next[1]+state_next[2]))
-        y_ee = self.conf.y_base + self.conf.l*(math.sin(state_next[0]) + math.sin(state_next[0]+state_next[1]) + math.sin(state_next[0]+state_next[1]+state_next[2]))  
-        
-        #rename reward parameters
-        alpha = self.conf.soft_max_param[0]
-        alpha2 = self.conf.soft_max_param[1]
-
-        XC1 = self.conf.obs_param[0]
-        YC1 = self.conf.obs_param[1]
-        XC2 = self.conf.obs_param[2]
-        YC2 = self.conf.obs_param[3]
-        XC3 = self.conf.obs_param[4]
-        YC3 = self.conf.obs_param[5]
-        
-        A1 = self.conf.obs_param[6]
-        B1 = self.conf.obs_param[7]
-        A2 = self.conf.obs_param[8]
-        B2 = self.conf.obs_param[9]
-        A3 = self.conf.obs_param[10]
-        B3 = self.conf.obs_param[11]
-
-        w_d = self.conf.weight[0]
-        w_u = self.conf.weight[1]
-        w_peak = self.conf.weight[2]
-        w_ob1 = self.conf.weight[3]
-        w_ob2 = self.conf.weight[3]
-        w_ob3 = self.conf.weight[3]
-        w_v = self.conf.weight[4]
-
-        TARGET_STATE = self.conf.TARGET_STATE
+        x_ee = self.conf.x_base + self.conf.l*(math.cos(state[0]) + math.cos(state[0]+state[1]) + math.cos(state[0]+state[1]+state[2]))
+        y_ee = self.conf.y_base + self.conf.l*(math.sin(state[0]) + math.sin(state[0]+state[1]) + math.sin(state[0]+state[1]+state[2]))  
 
         # Penalties for the ellipses representing the obstacle
-        ell1_pen = math.log(math.exp(alpha*-(((x_ee-XC1)**2)/((A1/2)**2) + ((y_ee-YC1)**2)/((B1/2)**2) - 1.0)) + 1)/alpha
-        ell2_pen = math.log(math.exp(alpha*-(((x_ee-XC2)**2)/((A2/2)**2) + ((y_ee-YC2)**2)/((B2/2)**2) - 1.0)) + 1)/alpha
-        ell3_pen = math.log(math.exp(alpha*-(((x_ee-XC3)**2)/((A3/2)**2) + ((y_ee-YC3)**2)/((B3/2)**2) - 1.0)) + 1)/alpha
+        ell1_pen = math.log(math.exp(self.alpha*-(((x_ee-self.XC1)**2)/((self.A1/2)**2) + ((y_ee-self.YC1)**2)/((self.B1/2)**2) - 1.0)) + 1)/self.alpha
+        ell2_pen = math.log(math.exp(self.alpha*-(((x_ee-self.XC2)**2)/((self.A2/2)**2) + ((y_ee-self.YC2)**2)/((self.B2/2)**2) - 1.0)) + 1)/self.alpha
+        ell3_pen = math.log(math.exp(self.alpha*-(((x_ee-self.XC3)**2)/((self.A3/2)**2) + ((y_ee-self.YC3)**2)/((self.B3/2)**2) - 1.0)) + 1)/self.alpha
 
         # Term pushing the agent to stay in the neighborhood of target
-        peak_reward = math.log(math.exp(alpha2*-(math.sqrt((x_ee-TARGET_STATE[0])**2 +0.1) - math.sqrt(0.1) - 0.1 + math.sqrt((y_ee-TARGET_STATE[1])**2 +0.1) - math.sqrt(0.1) - 0.1)) + 1)/alpha2
+        peak_reward = math.log(math.exp(self.alpha2*-(math.sqrt((x_ee-self.TARGET_STATE[0])**2 +0.1) - math.sqrt(0.1) - 0.1 + math.sqrt((y_ee-self.TARGET_STATE[1])**2 +0.1) - math.sqrt(0.1) - 0.1)) + 1)/self.alpha2
 
         # Term penalizing the FINAL joint velocity
-        if state_next[-1] == self.conf.dt*self.conf.NSTEPS:
-            vel_joint = state_next[nq:nx].dot(state_next[nq:nx]) - 10000/w_v
+        if state[-1] == self.conf.dt*self.conf.NSTEPS:
+            vel_joint = state[nq:nx].dot(state[nq:nx]) - 10000/self.w_v
         else:    
             vel_joint = 0
 
-        r = (w_d*(-(x_ee-TARGET_STATE[0])**2 -(y_ee-TARGET_STATE[1])**2) + w_peak*peak_reward - w_v*vel_joint - w_ob1*ell1_pen - w_ob2*ell2_pen - w_ob3*ell3_pen - w_u*(action.dot(action)))/100 
+        r = (self.w_d*(-(x_ee-self.TARGET_STATE[0])**2 -(y_ee-self.TARGET_STATE[1])**2) + self.w_peak*peak_reward - self.w_v*vel_joint - self.w_ob1*ell1_pen - self.w_ob2*ell2_pen - self.w_ob3*ell3_pen - self.w_u*(action.dot(action)))/100 
         
         return r
     
-    def simulate_and_derivative_tf(self,state,action):
+    def simulate_and_derivative_tf(self, state, action):
         ''' Simulate dynamics using tensors and compute its gradient w.r.t control. Batch-wise computation '''        
         state_next = np.zeros((self.conf.BATCH_SIZE, self.conf.nb_state))
         Fu = np.zeros((self.conf.BATCH_SIZE,self.conf.nb_state,self.conf.nb_action))      
@@ -165,11 +159,11 @@ class Manipulator(gym.Env):
             # Dynamics gradient w.r.t control (1st order euler)
             pin.computeABADerivatives(self.conf.robot.model, self.conf.robot.data, q_init, v_init, action[sample_indx])       
 
-            Fu_sample = np.zeros((nx, nu))
-            Fu_sample[nv:, :] = self.conf.robot.data.Minv
-            Fu_sample *= self.conf.dt
+            Fu_sample = np.zeros((nx+1, nu))
+            Fu_sample[nv:-1, :] = self.conf.robot.data.Minv
+            Fu_sample[:nx, :] *= self.conf.dt
 
-            Fu[sample_indx] = np.vstack((Fu_sample, np.zeros(self.conf.nb_action)))    
+            Fu[sample_indx] = Fu_sample  
 
             # Simulate control action
             self.conf.simu.simulate(np.concatenate((q_init, v_init)), action[sample_indx], self.conf.dt, 1)
@@ -178,69 +172,31 @@ class Manipulator(gym.Env):
             state_next[sample_indx,self.conf.robot.nq:self.conf.robot.nv+self.conf.robot.nq] = np.copy(self.conf.simu.v)
             state_next[sample_indx,-1] = state_np[-1] + self.conf.dt
 
-        return state_next, Fu 
+        return tf.convert_to_tensor(state_next, dtype=tf.float32), Fu 
     
-    def reward_tf(self,state_next,action,BATCH_SIZE,last_ts):
+    def reward_tf(self, state, action, BATCH_SIZE, last_ts):
         ''' Compute reward using tensors. Batch-wise computation '''    
-        if self.conf.NORMALIZE_INPUTS:
-            state_next_not_norm = de_normalize_tensor(state_next, self.conf.state_norm_arr)
-        else:
-            state_next_not_norm = state_next 
+        x_ee = self.conf.x_base + self.conf.l*(tf.math.cos(state[:,0]) + tf.math.cos(state[:,0]+state[:,1]) + tf.math.cos(state[:,0]+state[:,1]+state[:,2]))
+        y_ee = self.conf.y_base + self.conf.l*(tf.math.sin(state[:,0]) + tf.math.sin(state[:,0]+state[:,1]) + tf.math.sin(state[:,0]+state[:,1]+state[:,2]))
 
-        x_ee = self.conf.x_base + self.conf.l*(tf.math.cos(state_next_not_norm[:,0]) + tf.math.cos(state_next_not_norm[:,0]+state_next_not_norm[:,1]) + tf.math.cos(state_next_not_norm[:,0]+state_next_not_norm[:,1]+state_next_not_norm[:,2]))
-        y_ee = self.conf.y_base + self.conf.l*(tf.math.sin(state_next_not_norm[:,0]) + tf.math.sin(state_next_not_norm[:,0]+state_next_not_norm[:,1]) + tf.math.sin(state_next_not_norm[:,0]+state_next_not_norm[:,1]+state_next_not_norm[:,2]))
-        
-        #rename reward parameters
-        alpha = self.conf.soft_max_param[0]
-        alpha2 = self.conf.soft_max_param[1]
-
-        XC1 = self.conf.obs_param[0]
-        YC1 = self.conf.obs_param[1]
-        XC2 = self.conf.obs_param[2]
-        YC2 = self.conf.obs_param[3]
-        XC3 = self.conf.obs_param[4]
-        YC3 = self.conf.obs_param[5]
-        
-        A1 = self.conf.obs_param[6]
-        B1 = self.conf.obs_param[7]
-        A2 = self.conf.obs_param[8]
-        B2 = self.conf.obs_param[9]
-        A3 = self.conf.obs_param[10]
-        B3 = self.conf.obs_param[11]
-
-        w_d = self.conf.weight[0]
-        w_u = self.conf.weight[1]
-        w_peak = self.conf.weight[2]
-        w_ob1 = self.conf.weight[3]
-        w_ob2 = self.conf.weight[3]
-        w_ob3 = self.conf.weight[3]
-        w_v = self.conf.weight[4]
-
-        TARGET_STATE = self.conf.TARGET_STATE
-
-        ell1_pen = tf.math.log(tf.math.exp(alpha*-(((x_ee[:]-XC1)**2)/((A1/2)**2) + ((y_ee[:]-YC1)**2)/((B1/2)**2) - 1.0)) + 1)/alpha
-        ell2_pen = tf.math.log(tf.math.exp(alpha*-(((x_ee[:]-XC2)**2)/((A2/2)**2) + ((y_ee[:]-YC2)**2)/((B2/2)**2) - 1.0)) + 1)/alpha
-        ell3_pen = tf.math.log(tf.math.exp(alpha*-(((x_ee[:]-XC3)**2)/((A3/2)**2) + ((y_ee[:]-YC3)**2)/((B3/2)**2) - 1.0)) + 1)/alpha
+        ell1_pen = tf.math.log(tf.math.exp(self.alpha*-(((x_ee[:]-self.XC1)**2)/((self.A1/2)**2) + ((y_ee[:]-self.YC1)**2)/((self.B1/2)**2) - 1.0)) + 1)/self.alpha
+        ell2_pen = tf.math.log(tf.math.exp(self.alpha*-(((x_ee[:]-self.XC2)**2)/((self.A2/2)**2) + ((y_ee[:]-self.YC2)**2)/((self.B2/2)**2) - 1.0)) + 1)/self.alpha
+        ell3_pen = tf.math.log(tf.math.exp(self.alpha*-(((x_ee[:]-self.XC3)**2)/((self.A3/2)**2) + ((y_ee[:]-self.YC3)**2)/((self.B3/2)**2) - 1.0)) + 1)/self.alpha
     
-        peak_reward = tf.math.log(tf.math.exp(alpha2*-(tf.math.sqrt((x_ee[:]-TARGET_STATE[0])**2 +0.1) - tf.math.sqrt(0.1) - 0.1 + tf.math.sqrt((y_ee[:]-TARGET_STATE[1])**2 +0.1) - tf.math.sqrt(0.1) - 0.1)) + 1)/alpha2
+        peak_reward = tf.math.log(tf.math.exp(self.alpha2*-(tf.math.sqrt((x_ee[:]-self.TARGET_STATE[0])**2 +0.1) - tf.math.sqrt(0.1) - 0.1 + tf.math.sqrt((y_ee[:]-self.TARGET_STATE[1])**2 +0.1) - tf.math.sqrt(0.1) - 0.1)) + 1)/self.alpha2
     
         vel_joint_list = []
         for i in range(BATCH_SIZE):
             if last_ts[i][0] == 1.0:
-                vel_joint_list.append(state_next_not_norm[i,3]**2 + state_next_not_norm[i,4]**2 + state_next_not_norm[i,5]**2 - 10000/w_v)
+                vel_joint_list.append(state[i,3]**2 + state[i,4]**2 + state[i,5]**2 - 10000/self.w_v)
             else:    
                 vel_joint_list.append(0)
         vel_joint = tf.cast(tf.stack(vel_joint_list),tf.float32)
     
-        r = (w_d*(-(x_ee[:]-TARGET_STATE[0])**2 -(y_ee[:]-TARGET_STATE[1])**2) + w_peak*peak_reward -w_v*vel_joint - w_ob1*ell1_pen - w_ob2*ell2_pen - w_ob3*ell3_pen - w_u*(action[:,0]**2+action[:,1]**2+action[:,2]**2))/100 
+        r = (self.w_d*(-(x_ee[:]-self.TARGET_STATE[0])**2 -(y_ee[:]-self.TARGET_STATE[1])**2) + self.w_peak*peak_reward -self.w_v*vel_joint - self.w_ob1*ell1_pen - self.w_ob2*ell2_pen - self.w_ob3*ell3_pen - self.w_u*(action[:,0]**2+action[:,1]**2+action[:,2]**2))/100 
         r = tf.reshape(r, [r.shape[0], 1])
 
         return r 
-
-    def simulate_tf(self,state,action):
-        ''' Simulate dynamics using tensors. Batch-wise computation '''
-        print('Sobolev training for Manipulator not implemented yet')
-        sys.exit()
 
     def get_end_effector_position(self, state, recompute=True):
         ''' Compute end-effector position '''
@@ -268,18 +224,16 @@ class DoubleIntegrator(gym.Env):
     :param x_init_max :             (float array) State upper bound initial configuration array
     :param x_min :                  (float array) State lower bound vector
     :param x_max :                  (float array) State upper bound vector
-    :param state_norm_arr :         (float array) Array used to normalize states
     :param u_min :                  (float array) Action lower bound array
     :param u_max :                  (float array) Action upper bound array
     :param nb_state :               (int) State size (robot state size + 1)
     :param nb_action :              (int) Action size (robot action size)
     :param dt :                     (float) Timestep
-    :param TARGET_STATE :           (float array) Target position
+    :param self.TARGET_STATE :           (float array) Target position
     :param soft_max_param :         (float array) Soft parameters array
     :param obs_param :              (float array) Obtacle parameters array
     :param weight :                 (float array) Weights array
     :param end_effector_frame_id :  (str)
-    :param NORMALIZE_INPUTS :       (bool)
     '''
 
     metadata = {
@@ -298,6 +252,34 @@ class DoubleIntegrator(gym.Env):
 
         self.window = None
         self.clock = None
+
+        #rename reward parameters
+        self.alpha = self.conf.soft_max_param[0]
+        self.alpha2 = self.conf.soft_max_param[1]
+
+        self.XC1 = self.conf.obs_param[0]
+        self.YC1 = self.conf.obs_param[1]
+        self.XC2 = self.conf.obs_param[2]
+        self.YC2 = self.conf.obs_param[3]
+        self.XC3 = self.conf.obs_param[4]
+        self.YC3 = self.conf.obs_param[5]
+        
+        self.A1 = self.conf.obs_param[6]
+        self.B1 = self.conf.obs_param[7]
+        self.A2 = self.conf.obs_param[8]
+        self.B2 = self.conf.obs_param[9]
+        self.A3 = self.conf.obs_param[10]
+        self.B3 = self.conf.obs_param[11]
+
+        self.w_d = self.conf.weight[0]
+        self.w_u = self.conf.weight[1]
+        self.w_peak = self.conf.weight[2]
+        self.w_ob1 = self.conf.weight[3]
+        self.w_ob2 = self.conf.weight[3]
+        self.w_ob3 = self.conf.weight[3]
+        self.w_v = self.conf.weight[4]
+
+        self.TARGET_STATE = self.conf.TARGET_STATE
     
     def reset(self, options=None):
         ''' Choose initial state uniformly at random '''
@@ -318,7 +300,7 @@ class DoubleIntegrator(gym.Env):
         state_next = self.simulate(state, action)
         
         # compute reward
-        reward = self.reward(state_next, action)
+        reward = self.reward(state, action)
         
         return (state_next, reward)
 
@@ -339,57 +321,29 @@ class DoubleIntegrator(gym.Env):
         
         return state_next
     
-    def reward(self, state_next, action=None):
+    def reward(self, state, action=None):
         ''' Compute reward '''
         nv = self.conf.robot.nv
         nq = self.conf.robot.nq
         nx = nv + nq
 
         # End-effector coordinates 
-        x_ee = state_next[0]
-        y_ee = state_next[1] 
-        
-        #rename reward parameters
-        alpha = self.conf.soft_max_param[0]
-        alpha2 = self.conf.soft_max_param[1]
-
-        XC1 = self.conf.obs_param[0]
-        YC1 = self.conf.obs_param[1]
-        XC2 = self.conf.obs_param[2]
-        YC2 = self.conf.obs_param[3]
-        XC3 = self.conf.obs_param[4]
-        YC3 = self.conf.obs_param[5]
-        
-        A1 = self.conf.obs_param[6]
-        B1 = self.conf.obs_param[7]
-        A2 = self.conf.obs_param[8]
-        B2 = self.conf.obs_param[9]
-        A3 = self.conf.obs_param[10]
-        B3 = self.conf.obs_param[11]
-
-        w_d = self.conf.weight[0]
-        w_u = self.conf.weight[1]
-        w_peak = self.conf.weight[2]
-        w_ob1 = self.conf.weight[3]
-        w_ob2 = self.conf.weight[3]
-        w_ob3 = self.conf.weight[3]
-        w_v = self.conf.weight[4]
-
-        TARGET_STATE = self.conf.TARGET_STATE
+        x_ee = state[0]
+        y_ee = state[1] 
 
         # Penalties for the ellipses representing the obstacle
-        ell1_pen = math.log(math.exp(alpha*-(((x_ee-XC1)**2)/((A1/2)**2) + ((y_ee-YC1)**2)/((B1/2)**2) - 1.0)) + 1)/alpha
-        ell2_pen = math.log(math.exp(alpha*-(((x_ee-XC2)**2)/((A2/2)**2) + ((y_ee-YC2)**2)/((B2/2)**2) - 1.0)) + 1)/alpha
-        ell3_pen = math.log(math.exp(alpha*-(((x_ee-XC3)**2)/((A3/2)**2) + ((y_ee-YC3)**2)/((B3/2)**2) - 1.0)) + 1)/alpha
+        ell1_pen = math.log(math.exp(self.alpha*-(((x_ee-self.XC1)**2)/((self.A1/2)**2) + ((y_ee-self.YC1)**2)/((self.B1/2)**2) - 1.0)) + 1)/self.alpha
+        ell2_pen = math.log(math.exp(self.alpha*-(((x_ee-self.XC2)**2)/((self.A2/2)**2) + ((y_ee-self.YC2)**2)/((self.B2/2)**2) - 1.0)) + 1)/self.alpha
+        ell3_pen = math.log(math.exp(self.alpha*-(((x_ee-self.XC3)**2)/((self.A3/2)**2) + ((y_ee-self.YC3)**2)/((self.B3/2)**2) - 1.0)) + 1)/self.alpha
 
         # Term pushing the agent to stay in the neighborhood of target
-        peak_reward = math.log(math.exp(alpha2*-(math.sqrt((x_ee-TARGET_STATE[0])**2 +0.1) - math.sqrt(0.1) - 0.1 + math.sqrt((y_ee-TARGET_STATE[1])**2 +0.1) - math.sqrt(0.1) - 0.1)) + 1)/alpha2
+        peak_reward = math.log(math.exp(self.alpha2*-(math.sqrt((x_ee-self.TARGET_STATE[0])**2 +0.1) - math.sqrt(0.1) - 0.1 + math.sqrt((y_ee-self.TARGET_STATE[1])**2 +0.1) - math.sqrt(0.1) - 0.1)) + 1)/self.alpha2
 
-        r = (w_d*(-(x_ee-TARGET_STATE[0])**2 -(y_ee-TARGET_STATE[1])**2) + w_peak*peak_reward - w_ob1*ell1_pen - w_ob2*ell2_pen - w_ob3*ell3_pen - w_u*(action.dot(action)) + 10000)/100 
+        r = (self.w_d*(-(x_ee-self.TARGET_STATE[0])**2 -(y_ee-self.TARGET_STATE[1])**2) + self.w_peak*peak_reward - self.w_ob1*ell1_pen - self.w_ob2*ell2_pen - self.w_ob3*ell3_pen - self.w_u*(action.dot(action)) + 10000)/100 
 
         return r
 
-    def simulate_and_derivative_tf(self,state,action):
+    def simulate_and_derivative_tf(self, state, action):
         ''' Simulate dynamics using tensors and compute its gradient w.r.t control. Batch-wise computation '''
         state_next = np.zeros((self.conf.BATCH_SIZE, self.conf.nb_state))
         Fu = np.zeros((self.conf.BATCH_SIZE,self.conf.nb_state,self.conf.nb_action))      
@@ -410,11 +364,11 @@ class DoubleIntegrator(gym.Env):
             # Dynamics gradient w.r.t control (1st order euler)
             pin.computeABADerivatives(self.conf.robot.model, self.conf.robot.data, q_init, v_init, action[sample_indx])       
 
-            Fu_sample = np.zeros((nx, nu))
-            Fu_sample[nv:, :] = self.conf.robot.data.Minv
-            Fu_sample *= self.conf.dt
+            Fu_sample = np.zeros((nx+1, nu))
+            Fu_sample[nv:-1, :] = self.conf.robot.data.Minv
+            Fu_sample[:nx, :] *= self.conf.dt
 
-            Fu[sample_indx] = np.vstack((Fu_sample, np.zeros(self.conf.nb_action)))    
+            Fu[sample_indx] = Fu_sample
 
             # Simulate control action
             self.conf.simu.simulate(np.concatenate((q_init, v_init)), action[sample_indx], self.conf.dt, 1)
@@ -423,71 +377,23 @@ class DoubleIntegrator(gym.Env):
             state_next[sample_indx,self.conf.robot.nq:self.conf.robot.nv+self.conf.robot.nq] = np.copy(self.conf.simu.v)
             state_next[sample_indx,-1] = state_np[-1] + self.conf.dt
 
-        return state_next, Fu 
+        return tf.convert_to_tensor(state_next, dtype=tf.float32), Fu 
 
-    def reward_tf(self,state_next,action,BATCH_SIZE,last_ts):
+    def reward_tf(self, state, action, BATCH_SIZE, last_ts):
         ''' Compute reward using tensors. Batch-wise computation '''
-        # De-normalize state_next because it is normalized if self.conf.NORMALIZE_INPUTS=1. (Mask trick needed because TensorFlow's autodifferentiation doesn't work if tensors' elements are directly modified by accessing them)
-        if self.conf.NORMALIZE_INPUTS:
-            state_next_not_norm = de_normalize_tensor(state_next, self.conf.state_norm_arr)
+        x_ee = state[:,0]
+        y_ee = state[:,1] 
+
+        ell1_pen = tf.math.log(tf.math.exp(self.alpha*-(((x_ee[:]-self.XC1)**2)/((self.A1/2)**2) + ((y_ee[:]-self.YC1)**2)/((self.B1/2)**2) - 1.0)) + 1)/self.alpha
+        ell2_pen = tf.math.log(tf.math.exp(self.alpha*-(((x_ee[:]-self.XC2)**2)/((self.A2/2)**2) + ((y_ee[:]-self.YC2)**2)/((self.B2/2)**2) - 1.0)) + 1)/self.alpha
+        ell3_pen = tf.math.log(tf.math.exp(self.alpha*-(((x_ee[:]-self.XC3)**2)/((self.A3/2)**2) + ((y_ee[:]-self.YC3)**2)/((self.B3/2)**2) - 1.0)) + 1)/self.alpha
     
-        x_ee = state_next[:,0]
-        y_ee = state_next[:,1] 
-
-        #rename reward parameters
-        alpha = self.conf.soft_max_param[0]
-        alpha2 = self.conf.soft_max_param[1]
-
-        XC1 = self.conf.obs_param[0]
-        YC1 = self.conf.obs_param[1]
-        XC2 = self.conf.obs_param[2]
-        YC2 = self.conf.obs_param[3]
-        XC3 = self.conf.obs_param[4]
-        YC3 = self.conf.obs_param[5]
-        
-        A1 = self.conf.obs_param[6]
-        B1 = self.conf.obs_param[7]
-        A2 = self.conf.obs_param[8]
-        B2 = self.conf.obs_param[9]
-        A3 = self.conf.obs_param[10]
-        B3 = self.conf.obs_param[11]
-
-        w_d = self.conf.weight[0]
-        w_u = self.conf.weight[1]
-        w_peak = self.conf.weight[2]
-        w_ob1 = self.conf.weight[3]
-        w_ob2 = self.conf.weight[3]
-        w_ob3 = self.conf.weight[3]
-        w_v = self.conf.weight[4]
-
-        TARGET_STATE = self.conf.TARGET_STATE
-
-        ell1_pen = tf.math.log(tf.math.exp(alpha*-(((x_ee[:]-XC1)**2)/((A1/2)**2) + ((y_ee[:]-YC1)**2)/((B1/2)**2) - 1.0)) + 1)/alpha
-        ell2_pen = tf.math.log(tf.math.exp(alpha*-(((x_ee[:]-XC2)**2)/((A2/2)**2) + ((y_ee[:]-YC2)**2)/((B2/2)**2) - 1.0)) + 1)/alpha
-        ell3_pen = tf.math.log(tf.math.exp(alpha*-(((x_ee[:]-XC3)**2)/((A3/2)**2) + ((y_ee[:]-YC3)**2)/((B3/2)**2) - 1.0)) + 1)/alpha
+        peak_reward = tf.math.log(tf.math.exp(self.alpha2*-(tf.math.sqrt((x_ee[:]-self.TARGET_STATE[0])**2 +0.1) - tf.math.sqrt(0.1) - 0.1 + tf.math.sqrt((y_ee[:]-self.TARGET_STATE[1])**2 +0.1) - tf.math.sqrt(0.1) - 0.1)) + 1)/self.alpha2
     
-        peak_reward = tf.math.log(tf.math.exp(alpha2*-(tf.math.sqrt((x_ee[:]-TARGET_STATE[0])**2 +0.1) - tf.math.sqrt(0.1) - 0.1 + tf.math.sqrt((y_ee[:]-TARGET_STATE[1])**2 +0.1) - tf.math.sqrt(0.1) - 0.1)) + 1)/alpha2
-    
-        r = (w_d*(-(x_ee[:]-TARGET_STATE[0])**2 -(y_ee[:]-TARGET_STATE[1])**2) + w_peak*peak_reward - w_ob1*ell1_pen - w_ob2*ell2_pen - w_ob3*ell3_pen - w_u*(action[:,0]**2+action[:,1]**2) + 10000)/100 
+        r = (self.w_d*(-(x_ee[:]-self.TARGET_STATE[0])**2 -(y_ee[:]-self.TARGET_STATE[1])**2) + self.w_peak*peak_reward - self.w_ob1*ell1_pen - self.w_ob2*ell2_pen - self.w_ob3*ell3_pen - self.w_u*(action[:,0]**2+action[:,1]**2) + 10000)/100 
         r = tf.reshape(r, [r.shape[0], 1])
 
         return r 
-
-    def simulate_tf(self,state,action):
-        ''' Simulate dynamics using tensors. Batch-wise computation '''
-        q0_next = state[:,0] + self.conf.dt*state[:,2] + 0.5*action[:,0]*self.conf.dt**2
-        q1_next = state[:,1] + self.conf.dt*state[:,3] + 0.5*action[:,1]*self.conf.dt**2
-        v0_next = state[:,2] + self.conf.dt*action[:,0]
-        v1_next = state[:,3] + self.conf.dt*action[:,1]
-        t_next  = state[:,-1]+ self.conf.dt
-        if self.conf.NORMALIZE_INPUTS:
-            q0_next = q0_next / self.conf.state_norm_arr[0]
-            q1_next = q1_next / self.conf.state_norm_arr[1]
-            v0_next = v0_next / self.conf.state_norm_arr[2]
-            v1_next = v1_next / self.conf.state_norm_arr[3]
-            t_next = 2*t_next / self.conf.state_norm_arr[-1] -1  
-
-        return tf.stack([q0_next, q1_next, v0_next, v1_next, t_next],1)
 
     def get_end_effector_position(self, state, recompute=True):
         ''' Compute end-effector position '''

@@ -2,8 +2,6 @@ import math
 import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
-from pyomo.dae import *
-from pyomo.environ import *
 from utils import array2tensor
 from matplotlib.patches import Ellipse
 
@@ -186,9 +184,7 @@ class PLOT():
 
         self.plot_policy_eval(x_ee_all_sim,y_ee_all_sim,update_step_cntr, diff_loc=diff_loc, PRETRAIN=PRETRAIN)
 
-        return  tau_all_sim, x_ee_all_sim, y_ee_all_sim
-
-    def plot_results(self, tau, x_TO,y_TO,x_RL,y_RL,steps,to=0):
+    def plot_results(self, tau, x_TO, y_TO, x_RL, y_RL, steps, to=0):
         ''' Plot results from TO and episode to check consistency '''
         timesteps = self.conf.dt*np.arange(steps+1)
         fig = plt.figure(figsize=(12,8))
@@ -212,7 +208,7 @@ class PLOT():
         col = ['ro', 'bo', 'go']
         legend_list = []
         for i in range(self.conf.nb_action):
-            ax2.plot(timesteps, tau[:,i], col[i], linewidth=1, markersize=1) 
+            ax2.plot(timesteps[:-1], tau[:,i], col[i], linewidth=1, markersize=1) 
             legend_list.append('tau{}'.format(i))
         ax2.legend(legend_list,fontsize=20) 
         ax2.set_xlabel('Time [s]',fontsize=20)

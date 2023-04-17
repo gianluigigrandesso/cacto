@@ -4,9 +4,9 @@ import numpy as np
 from robot_utils import RobotWrapper, RobotSimulator
 
 ''' CACTO parameters '''
-ep_no_update = 0                                                                                            # Episodes to wait before starting to update the NNs
-NEPISODES = 50000+ep_no_update                                                                              # Max training episodes
+NEPISODES = 50000                                                                                           # Max training episodes
 EP_UPDATE = 25                                                                                              # Number of episodes before updating critic and actor
+NLOOPS = int(NEPISODES/EP_UPDATE)                                                                           # Number of algorithm loops
 NSTEPS = 100                                                                                                # Max episode length
 CRITIC_LEARNING_RATE = 0.001                                                                                # Learning rate for the critic network
 ACTOR_LEARNING_RATE = 0.0005                                                                                # Learning rate for the policy network
@@ -15,8 +15,19 @@ UPDATE_LOOPS = 160                                                              
 REPLAY_SIZE = 2**15                                                                                         # Size of the replay buffer
 BATCH_SIZE = 64                                                                                             # Size of the mini-batch 
 
-log_rollout_interval = 100                                                                                  # plot.rollout() interval
-log_interval = 1000                                                                                         # Log interval
+save_flag = 0
+if save_flag:
+    save_interval = int(1000/EP_UPDATE)                                                                     # save NNs interval
+else:
+    save_interval = np.inf                                                                                  # save NNs interval
+
+plot_flag = 0
+if save_flag:
+    plot_rollout_interval = int(100/EP_UPDATE)                                                              # plot.rollout() interval
+    plot_rollout_interval_diff_loc = int(1000/EP_UPDATE)                                                    # plot.rollout() interval - diff_loc
+else:
+    plot_rollout_interval = np.inf                                                                          # plot.rollout() interval
+    plot_rollout_interval_diff_loc = np.inf                                                                 # plot.rollout() interval - diff_loc
 
 NH1 = 256                                                                                                   # 1st hidden layer size
 NH2 = 256                                                                                                   # 2nd hidden layer size  
@@ -58,7 +69,6 @@ prioritized_replay_eps = 1e-5                                                   
 
 NORMALIZE_INPUTS = 1                                                                                        # Flag to normalize inputs (state and action)
 
-EPISODE_CRITIC_PRETRAINING = 0                                                                              # Episodes of critic pretraining
 EPISODE_ICS_INIT = 0                                                                                        # Episodes where ICS warm-starting is used instead of actor rollout
 
 wreg_l1_A = 1e-2                                                                                            # Weight of L1 regularization in actor's network
@@ -66,14 +76,13 @@ wreg_l2_A = 1e-2                                                                
 wreg_l1_C = 1e-2                                                                                            # Weight of L1 regularization in critic's network
 wreg_l2_C = 1e-2                                                                                            # Weight of L2 regularization in critic's network
 
-SOBOLEV = 0 
+SOBOLEV = 0
 wd = 0                                                                                                      # Derivative-related loss weight
 
-# Set n_steps_TD_N ONLY is SOBOLEV not used
-if SOBOLEV == 1:
-    nsteps_TD_N = 0
-else:                                                                                             # Flag to use n-step TD rather than 1-step TD
-    nsteps_TD_N = 1                                                                                         # Number of lookahed steps
+# Set n_steps_TD_N ONLY if MC not used
+MC = 0                                                                                                      # Flag to use MC or TD(n)
+if not MC:
+    nsteps_TD_N = 1                                                                                         # Number of lookahed steps if TD(n) is used
 
 
 
@@ -87,16 +96,16 @@ update_step_counter = 0                                                         
 # Obstacles parameters
 XC1 = -2.0                                                                                                  # X coord center ellipse 1
 YC1 = 0.0                                                                                                   # Y coord center ellipse 1
-A1 = 6                                                                                                      # Width ellipse 1 
-B1 = 10                                                                                                     # Height ellipse 1 
+A1  = 6                                                                                                     # Width ellipse 1 
+B1  = 10                                                                                                    # Height ellipse 1 
 XC2 = 3.0                                                                                                   # X coord center ellipse 2 
 YC2 = 4.0                                                                                                   # Y coord center ellipse 2
-A2 = 12                                                                                                     # Width ellipse 2 
-B2 = 4                                                                                                      # Height ellipse 2 
+A2  = 12                                                                                                    # Width ellipse 2 
+B2  = 4                                                                                                     # Height ellipse 2 
 XC3 = 3.0                                                                                                   # X coord center ellipse 2 
 YC3 = -4.0                                                                                                  # Y coord center ellipse 2
-A3 = 12                                                                                                     # Width ellipse 2 
-B3 = 4                                                                                                      # Height ellipse 2 
+A3  = 12                                                                                                    # Width ellipse 2 
+B3  = 4                                                                                                     # Height ellipse 2 
 obs_param = np.array([XC1, YC1, XC2, YC2, XC3, YC3, A1, B1, A2, B2, A3, B3])                                # Obstacle parameters vector
 
 # Weigths
@@ -123,7 +132,7 @@ TARGET_STATE = np.array([x_des,y_des])                                          
 Fig_path = './Results/Figures/Manipulator'                                                                  # Figure path
 NNs_path = './Results/NNs/Manipulator'                                                                      # NNs path
 Config_path = './Results/Configs/Manipulator/'                                                              # Configuration path
-Log_path = './Log//Manipulator'                                                                             # Log path
+Log_path = './Log/Manipulator'                                                                              # Log path
 
 
 
@@ -159,15 +168,15 @@ x_init_max = np.array([ math.pi,  math.pi,  math.pi,  math.pi/4,  math.pi/4,  ma
 state_norm_arr = np.array([15,15,15,10,10,10,int(NSTEPS*dt)])                                               # Array used to normalize states
 
 # initial configurations for plot.rollout()
-init_states_sim = [np.array([math.pi/4,-math.pi/8,-math.pi/8,0.0,0.0,0.0,0.0]),                             
-                   np.array([-math.pi/4,math.pi/8,math.pi/8,0.0,0.0,0.0,0.0]),
-                   np.array([math.pi/2,0.0,0.0,0.0,0.0,0.0,0.0]),
-                   np.array([-math.pi/2,0.0,0.0,0.0,0.0,0.0,0.0]),
-                   np.array([3*math.pi/4,0.0,0.0,0.0,0.0,0.0,0.0]),
-                   np.array([-3*math.pi/4,0.0,0.0,0.0,0.0,0.0,0.0]),
-                   np.array([math.pi/4,0.0,0.0,0.0,0.0,0.0,0.0]),
-                   np.array([-math.pi/4,0.0,0.0,0.0,0.0,0.0,0.0]),
-                   np.array([math.pi,0.0,0.0,0.0,0.0,0.0,0.0])]
+init_states_sim = [np.array([math.pi/4,    -math.pi/8, -math.pi/8, 0.0, 0.0, 0.0, 0.0]),                             
+                   np.array([-math.pi/4,   math.pi/8,  math.pi/8,  0.0, 0.0, 0.0, 0.0]),
+                   np.array([math.pi/2,    0.0,        0.0,        0.0, 0.0, 0.0, 0.0]),
+                   np.array([-math.pi/2,   0.0,        0.0,        0.0, 0.0, 0.0, 0.0]),
+                   np.array([3*math.pi/4,  0.0,        0.0,        0.0, 0.0, 0.0, 0.0]),
+                   np.array([-3*math.pi/4, 0.0,        0.0,        0.0, 0.0, 0.0, 0.0]),
+                   np.array([math.pi/4,    0.0,        0.0,        0.0, 0.0, 0.0, 0.0]),
+                   np.array([-math.pi/4,   0.0,        0.0,        0.0, 0.0, 0.0, 0.0]),
+                   np.array([math.pi,      0.0,        0.0,        0.0, 0.0, 0.0, 0.0])]
 
 # Action parameters
 nb_action = robot.na                                                                                        # Action size
@@ -177,3 +186,9 @@ u_min = tau_lower_bound*np.ones(nb_action)                                      
 u_max = tau_upper_bound*np.ones(nb_action)                                                                  # Action upper bound vector
 
 fig_ax_lim = np.array([[-41, 31], [-35, 35]])                                                               # Figure axis limit [x_min, x_max, y_min, y_max]
+
+
+
+nb_cpus = 4
+
+DECAY_RATE = 1
