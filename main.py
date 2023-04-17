@@ -177,20 +177,20 @@ if __name__ == '__main__':
                 buffer.add(state_arr[j][i], partial_cost_to_go_arr[j][i], state_next_rollout_arr[j][i], done_arr[j][i])
        
         # Update NNs
-        update_step_counter = RLAC.learn_and_update(ep, update_step_counter, buffer)
+        update_step_counter, actor_model, critic_model, target_critic = RLAC.learn_and_update(ep, update_step_counter, buffer)
         
         # Plot rollouts and state and control trajectories
         if ep%conf.plot_rollout_interval_diff_loc==0:
-            plot_fun.rollout(update_step_counter, RLAC.actor_model, conf.init_states_sim, diff_loc=1)
+            plot_fun.rollout(update_step_counter, actor_model, conf.init_states_sim, diff_loc=1)
             #plot_fun.plot_results(TO_controls[-1], x_ee_arr_TO[-1], y_ee_arr_TO[-1], x_ee_arr_RL[-1], y_ee_arr_RL[-1], NSTEPS_SH[-1], to=success_flag)
         if ep%conf.plot_rollout_interval==0: 
-            plot_fun.rollout(update_step_counter, RLAC.actor_model, conf.init_states_sim)         
+            plot_fun.rollout(update_step_counter, actor_model, conf.init_states_sim)         
 
         # Plot rollouts and save the NNs every conf.log_rollout_interval-training episodes
         if ep%conf.save_interval==0:  
-            RLAC.actor_model.save_weights(conf.NNs_path+"/actor_{}.h5".format(update_step_counter))
-            RLAC.critic_model.save_weights(conf.NNs_path+"/critic_{}.h5".format(update_step_counter))
-            RLAC.target_critic.save_weights(conf.NNs_path+"/target_critic_{}.h5".format(update_step_counter))
+            actor_model.save_weights(conf.NNs_path+"/actor_{}.h5".format(update_step_counter))
+            critic_model.save_weights(conf.NNs_path+"/critic_{}.h5".format(update_step_counter))
+            target_critic.save_weights(conf.NNs_path+"/target_critic_{}.h5".format(update_step_counter))
 
         ep_reward_arr[ep*conf.EP_UPDATE:(ep+1)*conf.EP_UPDATE] = ep_return
         avg_reward = np.mean(ep_reward_arr[-40:])  # Mean of last 40 episodes
@@ -207,9 +207,9 @@ if __name__ == '__main__':
     plot_fun.plot_Return(ep_reward_arr)
 
     # Save networks at the end of the training
-    RLAC.actor_model.save_weights(conf.NNs_path+"/actor_final.h5")
-    RLAC.critic_model.save_weights(conf.NNs_path+"/critic_final.h5")
-    RLAC.target_critic.save_weights(conf.NNs_path+"/target_critic_final.h5")
+    actor_model.save_weights(conf.NNs_path+"/actor_final.h5")
+    critic_model.save_weights(conf.NNs_path+"/critic_final.h5")
+    target_critic.save_weights(conf.NNs_path+"/target_critic_final.h5")
 
     # Simulate the final policy
-    tau_all_final_sim, x_ee_all_final_sim, y_ee_all_final_sim = plot_fun.rollout(update_step_counter, RLAC.actor_model, conf.init_states_sim)
+    plot_fun.rollout(update_step_counter, actor_model, conf.init_states_sim)

@@ -189,6 +189,6 @@ fig_ax_lim = np.array([[-41, 31], [-35, 35]])                                   
 
 
 
-nb_cpus = 4
+nb_cpus = 1
 
 DECAY_RATE = 1

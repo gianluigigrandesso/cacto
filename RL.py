@@ -83,7 +83,7 @@ class RL_AC:
 
     def learn_and_update(self, ep, update_step_counter, buffer):
         ''' Sample experience and update buffer priorities and NNs '''
-        for i in range(self.conf.UPDATE_LOOPS):
+        for _ in range(self.conf.UPDATE_LOOPS):
             # Sample batch of transitions from the buffer
             experience = buffer.sample(self.conf.BATCH_SIZE)                                                                                # Bias annealing not performed, that's why beta is equal to a very small number (0 not accepted by PrioritizedReplayBuffer)
             state_batch, partial_cost_to_go_batch, state_next_rollout_batch, d_batch, weights_batch, batch_idxes = experience                          # Importance sampling weights (actually not used) should anneal the bias (see Prioritized Experience Replay paper) 
@@ -100,7 +100,7 @@ class RL_AC:
 
             update_step_counter += 1
         
-        return update_step_counter
+        return update_step_counter, self.actor_model, self.critic_model, self.target_critic
     
     def RL_Solve(self, ep, TO_controls):
         ''' Solve RL problem '''
