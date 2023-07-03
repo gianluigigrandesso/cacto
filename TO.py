@@ -365,7 +365,7 @@ class TO_Pyomo:
         
         return self.Fx, self.Fu
         
-    def backward_pass(self, T, TO_states, TO_controls, mu=1e-4):
+    def backward_pass(self, T, TO_states, TO_controls, mu=1e-4): 
         ''' Perform the backward-pass of DDP to obtain the derivatives of the Value function w.r.t x '''
         X_bar = np.zeros((T, self.nx))
         for i in range(self.nx):
