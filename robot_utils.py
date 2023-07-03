@@ -1,7 +1,7 @@
 import os
 import math
 import random
-#import gepetto.corbaserver
+import gepetto#.corbaserver
 import time
 import subprocess
 import numpy as np
@@ -265,6 +265,7 @@ class RobotSimulator:
             except:
                 pass
             gepetto.corbaserver.Client()
+            gepetto.Client()
             self.robot.initViewer(loadModel=True)
             self.gui = self.robot.viewer.gui
             if(show_floor):
