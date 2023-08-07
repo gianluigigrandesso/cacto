@@ -1,0 +1,68 @@
+<?xml version="1.0"?>
+<robot name="planar_manipulator_3dof">
+
+	<link name="world" />
+	
+	<joint name="slider_x" type="prismatic">
+	  <parent link="world" />
+	  <child link="Sx" />
+	  <origin rpy="0 0 0" xyz="0 0 0"/>
+	  <axis xyz="1 0 0" />
+	  <limit effort="100" velocity="20" />
+	</joint>
+
+	<link name="Sx">
+	  <visual>
+	    <geometry>
+	      <sphere radius="0"/>
+	    </geometry>
+	    <origin rpy="0 0 0" xyz="0 0 0" />
+	    <material name="blue">
+	      <color rgba="0 0 1.0 1.0"/>
+	    </material>
+	  </visual>
+	</link>
+
+	<joint name="slider_y" type="prismatic">
+	  <parent link="Sx" />
+	  <child link="Sy" />
+	  <origin xyz="0 0 0.0" rpy="0 0 0" />
+	  <axis xyz="0 1 0" />
+	  <limit effort="100" velocity="20" />
+	</joint>
+
+	<link name="Sy">
+	  <visual>
+	    <geometry>
+	      <sphere radius="0"/>
+	    </geometry>
+	    <origin rpy="0 0 0" xyz="0 0 0" />
+	    <material name="blue">
+	      <color rgba="0 0 1.0 1.0"/>
+	    </material>
+	  </visual>
+	</link>
+
+       <joint name="fixed_ee" type="fixed">
+	  <parent link="Sy" />
+	  <child link="EE" />
+	  <origin xyz="0 0 0" rpy="0 0 0" />
+	</joint>
+	
+	<link name="EE">
+	  <visual>
+	    <geometry>
+	      <sphere radius="0.2"/>
+	    </geometry>
+	    <origin rpy="5 0 0" xyz="0 0 0" /> <!-- rpy="5 0 0" -->
+	    <material name="blue"/>
+	  </visual>
+	  <inertial>
+	    <origin xyz="0 0 0" rpy="0 0 0" />
+	    <mass value="1" />
+	    <inertia ixx="0.0" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="1" />
+	  </inertial>
+	</link>
+
+
+</robot>
