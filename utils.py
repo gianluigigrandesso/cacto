@@ -38,3 +38,5 @@ def normalize(state, state_norm_arr):
     state_norm[-1] = state_norm[-1] * 2 -1
 
     return state_norm
+
+
