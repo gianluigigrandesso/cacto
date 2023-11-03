@@ -1,6 +1,6 @@
 # CACTO: Continuous Actor-Critic algorithm with Trajectory Optimization
 
-- ***main*** implements CACTO with state = *[q,v,t]* (joint angles, velocities and time). Inputs: test-n (default: 0), system-id (default:'-'), TO-method (default: 'pyomo'), and seed (default: None)
+- ***main*** implements CACTO with state = *[x,t]*. Inputs: test-n (default: 0), system-id (default:'-'), seed (default: None), recover-training-flag (default: False), nb-cpus (default: 15), and w-S (default: 0).
 - ***TO*** implements the TO problem of the selected *system* whose end effector has to reach a target state while avoiding an obstacle and ensuring low control effort. The TO problem is modelled in *CasADi* and solved with *ipopt*.
 - ***RL*** implements the acotr-critic RL problem of the selected *system* whose end effector has to reach a target state while avoiding an obstacle and ensuring low control. It creates the state trajectory and controls to initialize TO.
 - ***NeuralNetwork*** contains the functions to create the NN-models and to compute the quantities needed to update them.
