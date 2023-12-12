@@ -401,7 +401,7 @@ class PLOT():
             ax.set_xlim(self.xlim)
             ax.set_ylim(self.ylim)
             ax.set_aspect('equal', 'box')
-            plt.savefig('{}/N_try_{}/V_{}'.format(self.conf.Fig_path,self.N_try,int(n_update)))
+            plt.savefig('{}/N_try_{}/{}_{}'.format(self.conf.Fig_path,self.N_try,name,int(n_update)))
             plt.close()
 
     def plot_Critic_Value_function_from_sample(self, n_update, NSTEPS_SH, state_arr, reward_arr):
@@ -541,6 +541,74 @@ class PLOT():
             ax.grid()
             plt.savefig('{}/N_try_{}/ICS'.format(self.conf.Fig_path,self.N_try))
             plt.close(fig)
+
+    def plot_traj_from_ICS(self, init_state, TrOp, RLAC, update_step_counter=0,ep=0,steps=200, init=0,continue_flag=1):
+        ''' Plot results from TO and episode to check consistency '''
+        colors = cm.coolwarm(np.linspace(0.1,1,len(init_state)))
+
+        fig = plt.figure(figsize=(12,8))
+        ax1 = fig.add_subplot(1,2,1)
+        ax2 = fig.add_subplot(1,2,2)
+
+        for j in range(len(init_state)):
+
+            ee_pos_TO = np.zeros((steps,3))
+            ee_pos_RL = np.zeros((steps,3))
+            
+            if init == 0:
+                # zeros
+                _, init_TO_states, init_TO_controls, _, success_init_flag = RLAC.create_TO_init(0, init_state[j,:])
+            elif init == 1:
+                # NN
+                _, init_TO_states, init_TO_controls, _, success_init_flag = RLAC.create_TO_init(1, init_state[j,:])
+
+            if success_init_flag:
+                _, _, TO_states, _, _, _  = TrOp.TO_System_Solve(init_state[j,:], init_TO_states, init_TO_controls, steps-1)
+            else:
+                continue
+
+            try:
+                for i in range(steps):
+                    ee_pos_RL[i,:] = self.env.get_end_effector_position(init_TO_states[i,:])
+                    ee_pos_TO[i,:] = self.env.get_end_effector_position(TO_states[i,:])
+            except:
+                ee_pos_RL[i,:] = self.env.get_end_effector_position(init_TO_states[0,:])
+                ee_pos_TO[i,:] = self.env.get_end_effector_position(TO_states[0,:])
+
+            ax1.plot([self.conf.TARGET_STATE[0]],[self.conf.TARGET_STATE[1]],'b*',markersize=5) 
+            ax1.scatter(ee_pos_RL[0,0],ee_pos_RL[0,1],color=colors[j])
+            ax1.plot(ee_pos_RL[1:,0],ee_pos_RL[1:,1],'--',color=colors[j])
+                
+            ax2.plot([self.conf.TARGET_STATE[0]],[self.conf.TARGET_STATE[1]],'b*',markersize=5) 
+            ax2.scatter(ee_pos_TO[0,0],ee_pos_TO[0,1],color=colors[j])
+            ax2.plot(ee_pos_TO[1:,0],ee_pos_TO[1:,1],color=colors[j])
+        
+        obs_plot_list = self.plot_obstaces(a=0.5)
+        for i in range(len(obs_plot_list)):
+            ax1.add_patch(obs_plot_list[i])
+
+        obs_plot_list = self.plot_obstaces(a=0.5)
+        for i in range(len(obs_plot_list)):
+            ax2.add_patch(obs_plot_list[i])
+
+        ax1.set_xlim(self.xlim)
+        ax1.set_ylim(self.ylim)
+        ax1.set_aspect('equal', 'box')
+        ax1.set_xlabel('X [m]')
+        ax1.set_ylabel('Y [m]')
+        ax1.set_title('Warmstart traj.')
+
+        ax2.set_xlim(self.xlim)
+        ax2.set_ylim(self.ylim)
+        ax2.set_aspect('equal', 'box')
+        ax2.set_xlabel('X [m]')
+        #ax2.set_ylabel('Y [m]')
+        ax2.set_title('TO traj.')
+        #ax.legend()
+        ax1.grid(True)
+        ax2.grid(True)
+
+        plt.savefig('{}/N_try_{}/ee_traj_{}_{}'.format(self.conf.Fig_path,self.N_try,init,update_step_counter))
 
 
         

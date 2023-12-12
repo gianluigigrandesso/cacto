@@ -70,8 +70,6 @@ values_schedule_LR_A = [ACTOR_LEARNING_RATE,
 
 NORMALIZE_INPUTS = 1                                                                                        # Flag to normalize inputs (state)
 
-remap_angle = 0
-
 kreg_l1_A = 1e-2                                                                                            # Weight of L1 regularization in actor's network - kernel
 kreg_l2_A = 1e-2                                                                                            # Weight of L2 regularization in actor's network - kernel
 breg_l1_A = 1e-2                                                                                            # Weight of L2 regularization in actor's network - bias
@@ -211,7 +209,7 @@ delta_dot_lower_bound = -1
 delta_dot_upper_bound = 1                                                                                   # Action upper bound
 u_min = np.array([acc_lower_bound, delta_dot_lower_bound])                                                  # Action lower bound vector
 u_max = np.array([acc_upper_bound, delta_dot_upper_bound])                                                  # Action upper bound vector
-w_b = 1
+w_b = 1/w_u
 
 
 

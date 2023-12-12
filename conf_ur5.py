@@ -7,35 +7,47 @@ from robot_utils import RobotWrapper, RobotSimulator
 system_id = 'ur5'
 
 ''' CACTO parameters '''
-EP_UPDATE = 5                                                                                              # Number of episodes before updating critic and actor
-NUPDATES = 160                                                                                           # Max NNs updates
-UPDATE_LOOPS = int(160)                                                                                    # Number of updates of both critic and actor performed every EP_UPDATE episodes (80)
-NEPISODES = int(EP_UPDATE*(NUPDATES/UPDATE_LOOPS))                                                          # Max training episodes
-NLOOPS = int(NEPISODES/EP_UPDATE)                                                                           # Number of algorithm loops
-NSTEPS = 100                                                                                                # Max episode length
-CRITIC_LEARNING_RATE = 1e-3                                                                                 # Learning rate for the critic network (5e-3)
-ACTOR_LEARNING_RATE = 5e-4                                                                                  # Learning rate for the policy network
-REPLAY_SIZE = 2**15                                                                                         # Size of the replay buffer
-BATCH_SIZE = 64                                                                                            # Size of the mini-batch 
+EP_UPDATE = 200                                                                                            # Number of episodes before updating critic and actor
+NUPDATES = 380000                                                                                          # Max NNs updates
+UPDATE_LOOPS = np.arange(1000, 50000, 3000)                                                                # Number of updates of both critic and actor performed every EP_UPDATE episodes                                                                           
+NEPISODES = int(EP_UPDATE*len(UPDATE_LOOPS))                                                               # Max training episodes
+NLOOPS = len(UPDATE_LOOPS)                                                                                 # Number of algorithm loops
+NSTEPS = 100                                                                                               # Max episode length
+CRITIC_LEARNING_RATE = 5e-4                                                                                # Learning rate for the critic network
+ACTOR_LEARNING_RATE = 1e-3                                                                                 # Learning rate for the policy network
+REPLAY_SIZE = 2**16                                                                                        # Size of the replay buffer
+BATCH_SIZE = 64                                                                                           # Size of the mini-batch 
 
-critic_type = 'relu'
+# Set _steps_TD_N ONLY if MC not used
+MC = 0                                                                                                      # Flag to use MC or TD(n)
+if not MC:
+    UPDATE_RATE = 0.001                                                                                     # Homotopy rate to update the target critic network if TD(n) is used
+    nsteps_TD_N = int(NSTEPS/4)                                                                             # Number of lookahed steps if TD(n) is used
 
+
+### Savings parameters
 save_flag = 1
 if save_flag:
-    save_interval = 4000                                                                                    # save NNs interval
+    save_interval =  5000                                                                                   # Save NNs interval
 else:
-    save_interval = np.inf                                                                                  # save NNs interval
+    save_interval = np.inf                                                                                  # Save NNs interval
 
 plot_flag = 1
-if save_flag:
+if plot_flag:
     plot_rollout_interval = 400                                                                             # plot.rollout() interval (# update)
-    plot_rollout_interval_diff_loc = 4000                                                                   # plot.rollout() interval - diff_loc (# update)
+    plot_rollout_interval_diff_loc = 6000                                                                   # plot.rollout() interval - diff_loc (# update)
 else:
     plot_rollout_interval = np.inf                                                                          # plot.rollout() interval (# update)
     plot_rollout_interval_diff_loc = np.inf                                                                 # plot.rollout() interval - diff_loc (# update)
 
-NH1 = 256                                                                                                   # 1st hidden layer size
-NH2 = 256                                                                                                   # 2nd hidden layer size  
+
+
+### NNs parameters
+critic_type = 'sine'                                                                                        # Activation function - critic (either relu, elu, sine, sine-elu)
+
+NH1 = 256                                                                                                   # 1st hidden layer size - actor
+NH2 = 256                                                                                                   # 2nd hidden layer size - actor
+                                                                                                  # 2nd hidden layer size  
 
 LR_SCHEDULE = 0                                                                                             # Flag to use a scheduler for the learning rates
 boundaries_schedule_LR_C = [200*REPLAY_SIZE/BATCH_SIZE, 
@@ -60,75 +72,64 @@ values_schedule_LR_A = [ACTOR_LEARNING_RATE,
                         ACTOR_LEARNING_RATE/8,
                         ACTOR_LEARNING_RATE/16]  
 
-DECAY_RATE = 1
+NORMALIZE_INPUTS = 1                                                                                        # Flag to normalize inputs (state)
 
-prioritized_replay_alpha = 0                                                                                # α determines how much prioritization is used, set to 0 to use a normal buffer. Used to define the probability of sampling transition i --> P(i) = p_i**α / sum(p_k**α) where p_i is the priority of transition i 
-prioritized_replay_beta = 0.6           
-prioritized_replay_beta_iters = None                                                                        # Therefore let's exploit the flexibility of annealing the amount of IS correction over time, by defining a schedule on the exponent β that from its initial value β0 reaches 1 only at the end of learning.
-prioritized_replay_eps = 1e-2                                                                               # It's a small positive constant that prevents the edge-case of transitions not being revisited once their error is zero
-fresh_factor = 0.95
-
-NORMALIZE_INPUTS = 1                                                                                        # Flag to normalize inputs (state and action)
-
-remap_angle = 1
-
-EPISODE_ICS_INIT = 0                                                                                        # Episodes where ICS warm-starting is used instead of actor rollout
-
-wreg_l1_A = 1e-2                                                                                            # Weight of L1 regularization in actor's network
-wreg_l2_A = 1e-2                                                                                            # Weight of L2 regularization in actor's network
+kreg_l1_A = 1e-2                                                                                            # Weight of L1 regularization in actor's network - kernel
+kreg_l2_A = 1e-2                                                                                            # Weight of L2 regularization in actor's network - kernel
+breg_l1_A = 1e-2                                                                                            # Weight of L2 regularization in actor's network - bias
+breg_l2_A = 1e-2                                                                                            # Weight of L2 regularization in actor's network - bias
 kreg_l1_C = 1e-2                                                                                            # Weight of L1 regularization in critic's network - kernel
 kreg_l2_C = 1e-2                                                                                            # Weight of L2 regularization in critic's network - kernel
 breg_l1_C = 1e-2                                                                                            # Weight of L1 regularization in critic's network - bias
 breg_l2_C = 1e-2                                                                                            # Weight of L2 regularization in critic's network - bias
 
-#w_S = 0                                                                                                   # Derivative-related loss weight
-
-# Set _steps_TD_N ONLY if MC not used
-MC = 1                                                                                                      # Flag to use MC or TD(n)
-if not MC:
-    UPDATE_RATE = 0.05                                                                                      # Homotopy rate to update the target critic network
-    nsteps_TD_N = int(NSTEPS/4)                                                                             # Number of lookahed steps if TD(n) is used
+### Buffer parameters
+prioritized_replay_alpha = 0                                                                                # α determines how much prioritization is used, set to 0 to use a normal buffer. Used to define the probability of sampling transition i --> P(i) = p_i**α / sum(p_k**α) where p_i is the priority of transition i 
+prioritized_replay_beta = 0.6          
+prioritized_replay_beta_iters = None                                                                        # Therefore let's exploit the flexibility of annealing the amount of IS correction over time, by defining a schedule on the exponent β that from its initial value β0 reaches 1 only at the end of learning.
+prioritized_replay_eps = 1e-2                                                                               # It's a small positive constant that prevents the edge-case of transitions not being revisited once their error is zero
+fresh_factor = 0.95                                                                                         # Refresh factor
 
 
 
 ''' Cost function parameters '''
 # Obstacles parameters
-XC1 = 0.0                                                                                                  # X coord center ellipse 1
+XC1 = 0.0                                                                                                    # X coord center ellipse 1
 YC1 = 0.25                                                                                                   # Y coord center ellipse 1
 ZC1 = 0.2
 ell1_center = [XC1, YC1, ZC1]
-A1  = 0.5                                                                                                     # Width ellipse 1 
-B1  = 0.2                                                                                                   # Height ellipse 1 
+A1  = 0.5                                                                                                    # Width ellipse 1 
+B1  = 0.2                                                                                                    # Height ellipse 1 
 C1  = 0.34
-XC2 = 0.2                                                                                                   # X coord center ellipse 2 
-YC2 = 0.425                                                                                                   # Y coord center ellipse 2
+XC2 = 0.2                                                                                                    # X coord center ellipse 2 
+YC2 = 0.425                                                                                                  # Y coord center ellipse 2
 ZC2 = 0.2
 ell2_center = [XC2, YC2, ZC2]
 A2  = 0.4                                                                                                    # Width ellipse 2 
-B2  = 0.14                                                                                                     # Height ellipse 2 
+B2  = 0.14                                                                                                   # Height ellipse 2 
 C2  = 0.34
 XC3 = -0.2                                                                                                   # X coord center ellipse 2 
 YC3 = 0.425                                                                                                  # Y coord center ellipse 2
 ZC3 = 0.2
 ell3_center = [XC3, YC3, ZC3]
 A3  = 0.4                                                                                                    # Width ellipse 2 
-B3  = 0.14                                                                                                     # Height ellipse 2 
+B3  = 0.14                                                                                                   # Height ellipse 2 
 C3  = 0.34 
 obs_param = np.array([XC1, YC1, ZC1, XC2, YC2, ZC2, XC3, YC3, ZC3, A1, B1, C1, A2, B2, C2, A3, B3, C3])     # Obstacle parameters vector
 
 # Weigths
 w_d = 100                                                                                                   # Distance from target weight
-w_u = 1 #1e-8                                                                                                     # Control effort weight
+w_u = 1                                                                                                     # Control effort weight
 w_peak = 5e5                                                                                                # Target threshold weight
 w_ob = 5e6                                                                                                  # Obstacle weight
-w_v = 0*1e2                                                                                                   # Velocity weight
+w_v = 0                                                                                                     # Velocity weight
 weight = np.array([w_d, w_u, w_peak, w_ob, w_v])                                                            # Weights vector
 cost_weights_running  = np.array([w_d, w_peak, 0., w_ob, w_ob, w_ob, w_u])                                  # Running cost weights vector
 cost_weights_terminal = np.array([w_d, w_peak, 0., w_ob, w_ob, w_ob, 0])                                    # Terminal cost weights vector 
 
 # SoftMax parameters 
 alpha = 50                                                                                                  # Soft abs coefficient (obstacle) 
-alpha2 = 50                                                                                                  # Soft abs coefficient (peak)
+alpha2 = 5                                                                                                  # Soft abs coefficient (peak)
 soft_max_param = np.array([alpha, alpha2])                                                                  # Soft parameters vector
 
 # Cost function parameters
@@ -215,7 +216,8 @@ init_states_sim = [np.array([math.pi/4,    -math.pi/8, -math.pi/8, 0.0, 0.0, 0.0
 nb_action = robot.na                                                                                        # Action size
 u_min = np.array([-150, -150, -150, -28, -28, -28])                                                                  # Action lower bound vector
 u_max = np.array([150, 150, 150, 28, 28, 28])                                                                 # Action upper bound vector
-w_b = 10
+w_b = 1/w_u
+
 
 fig_ax_lim = np.array([[-3, 3], [-3, 3]])                                                               # Figure axis limit [x_min, x_max, y_min, y_max]
 
@@ -223,10 +225,3 @@ fig_ax_lim = np.array([[-3, 3], [-3, 3]])                                       
 profile = 0
 
 env_RL = 0
-
-
-
-biased_ICS_flag = 1
-if biased_ICS_flag:
-    thr_B = 500
-    nb_init_rand_state = 100

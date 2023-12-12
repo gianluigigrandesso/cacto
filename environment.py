@@ -158,7 +158,7 @@ class Env:
     def bound_control_cost(self, action):
         u_cost = 0
         for i in range(self.conf.nb_action):
-            u_cost += action[i]*action[i] + 1e2*(np.exp(-self.conf.w_b*(action[i]-self.conf.u_min[i])) + np.exp(-self.conf.w_b*(self.conf.u_max[i]-action[i])))
+            u_cost += action[i]*action[i] + self.conf.w_b*(action[i]/self.conf.u_max[i])**10
         
         return u_cost
 
@@ -279,7 +279,7 @@ class SingleIntegrator(Env):
         partial_reward = np.array([self.reward(w, s) for w, s in zip(weights, state)])
 
         # Redefine action-related cost in tensorflow version
-        u_cost = tf.reduce_sum(action**2+ 1e2*(tf.exp(-self.conf.w_b*(action-self.conf.u_min)) + tf.exp(-self.conf.w_b*(self.conf.u_max-action))),axis=1) 
+        u_cost = tf.reduce_sum((action**2 + self.conf.w_b*(action/self.conf.u_max)**10),axis=1) 
 
         r = self.scale*(- weights[:,6]*u_cost) + tf.convert_to_tensor(partial_reward, dtype=tf.float32)
 
@@ -355,7 +355,7 @@ class DoubleIntegrator(Env):
         partial_reward = np.array([self.reward(w, s) for w, s in zip(weights, state)])
 
         # Redefine action-related cost in tensorflow version
-        u_cost = tf.reduce_sum(action**2+ 1e2*(tf.exp(-self.conf.w_b*(action-self.conf.u_min)) + tf.exp(-self.conf.w_b*(self.conf.u_max-action))),axis=1) 
+        u_cost = tf.reduce_sum((action**2 + self.conf.w_b*(action/self.conf.u_max)**10),axis=1) 
 
         r = self.scale*(- weights[:,6]*u_cost) + tf.convert_to_tensor(partial_reward, dtype=tf.float32)
 
@@ -484,7 +484,7 @@ class Car(Env):
         partial_reward = np.array([self.reward(w, s) for w, s in zip(weights, state)])
 
         # Redefine action-related cost in tensorflow version
-        u_cost = tf.reduce_sum(action**2+ 1e2*(tf.exp(-self.conf.w_b*(action-self.conf.u_min)) + tf.exp(-self.conf.w_b*(self.conf.u_max-action))),axis=1) 
+        u_cost = tf.reduce_sum((action**2 + self.conf.w_b*(action/self.conf.u_max)**10),axis=1) 
         
         r = self.scale*(- weights[:,6]*u_cost) + tf.convert_to_tensor(partial_reward, dtype=tf.float32)
 
@@ -533,6 +533,24 @@ class CarPark(Car):
 
         self.nx = conf.nx
         self.nu = conf.na
+
+    def check_ICS_feasible(self, state):
+        ''' Check if ICS is not feasible '''
+        # check if ee is in the obstacles
+        x_ee, y_ee = self.get_end_effector_position(state)[:2]
+        theta_ee = state[2]
+
+        for i in range(len(self.conf.check_points_BF)):
+            check_points_WF_i = np.array([x_ee, y_ee]) + np.array([[math.cos(theta_ee), -math.sin(theta_ee)], [math.sin(theta_ee), math.cos(theta_ee)]]).dot(self.conf.check_points_BF[i,:])
+            obs_1 = self.obs_cost_fun(check_points_WF_i[0],check_points_WF_i[1],self.XC1,self.YC1,self.A1,self.B1)
+            obs_2 = self.obs_cost_fun(check_points_WF_i[0],check_points_WF_i[1],self.XC2,self.YC2,self.A2,self.B2)
+            obs_3 = self.obs_cost_fun(check_points_WF_i[0],check_points_WF_i[1],self.XC3,self.YC3,self.A3,self.B3)
+        
+            feasible_flag = obs_1 < 0.5 and obs_2 < 0.5 and obs_3 < 0.5
+            if feasible_flag == 0:
+                return feasible_flag
+
+        return feasible_flag
     
     def derivative(self, state, action):
         ''' Compute the derivative '''
@@ -584,7 +602,13 @@ class CarPark(Car):
         return p
     
     def obs_cost_fun(self,x,y,x_step,y_step,Wx,Wy,fv=1,k=50):
-        obs_cost = (4 + 4 * (y - y_step + Wy/2)**2 * k**2)**(-1/2) * fv * (-math.sqrt(4 + 4 * (y - y_step - Wy/2)**2 * k**2) / 2 + (y - y_step - Wy/2) * k) * (4 + 4 * (x - x_step + Wx/2)**2 * k**2)**(-1/2) * (4 + 4 * (y - y_step - Wy/2)**2 * k**2)**(-1/2) * (math.sqrt(4 + 4 * (y - y_step + Wy/2)**2 * k**2) / 2 + (y - y_step + Wy/2) * k) * (4 + 4 * (x - x_step - Wx/2)**2 * k**2)**(-1/2) * (math.sqrt(4 + 4 * (x - x_step + Wx/2)**2 * k**2) / 2 + (x - x_step + Wx/2) * k) * (-math.sqrt(4 + 4 * (x - x_step - Wx/2)**2 * k**2) / 2 + (x - x_step - Wx/2) * k)
+        k = self.conf.k_db
+            
+        term1 = 4 + 4 * (y - y_step + Wy/2)**2 * k**2
+        term2 = 4 + 4 * (y - y_step - Wy/2)**2 * k**2
+        term3 = 4 + 4 * (x - x_step + Wx/2)**2 * k**2
+        term4 = 4 + 4 * (x - x_step - Wx/2)**2 * k**2
+        obs_cost = (term1)**(-1/2) * fv * (-np.sqrt(term2) / 2 + (y - y_step - Wy/2) * k) * (term3)**(-1/2) * (term2)**(-1/2) * (np.sqrt(term1) / 2 + (y - y_step + Wy/2) * k) * (term4)**(-1/2) * (np.sqrt(term3) / 2 + (x - x_step + Wx/2) * k) * (-np.sqrt(term4) / 2 + (x - x_step - Wx/2) * k)
 
         return obs_cost
 
@@ -595,11 +619,10 @@ class CarPark(Car):
         theta_ee = state[2]
 
         obs_cost = 0
-        for i in range(len(self.conf.check_points_BF)):
-            check_points_WF_i = np.array([x_ee, y_ee]) + np.array([[math.cos(theta_ee), -math.sin(theta_ee)], [math.sin(theta_ee), math.cos(theta_ee)]]).dot(self.conf.check_points_BF[i,:])
-            obs_cost += self.obs_cost_fun(check_points_WF_i[0],check_points_WF_i[1],self.XC1,self.YC1,self.A1,self.B1)
-            obs_cost += self.obs_cost_fun(check_points_WF_i[0],check_points_WF_i[1],self.XC2,self.YC2,self.A2,self.B2)
-            obs_cost += self.obs_cost_fun(check_points_WF_i[0],check_points_WF_i[1],self.XC3,self.YC3,self.A3,self.B3)
+        check_points_WF = np.dot(np.array([[np.cos(theta_ee), -np.sin(theta_ee)], [np.sin(theta_ee), np.cos(theta_ee)]]), self.conf.check_points_BF.T).T + np.array([x_ee, y_ee])
+        obs_cost += np.sum(self.obs_cost_fun(check_points_WF[:, 0], check_points_WF[:, 1], self.XC1, self.YC1, self.A1, self.B1))
+        obs_cost += np.sum(self.obs_cost_fun(check_points_WF[:, 0], check_points_WF[:, 1], self.XC2, self.YC2, self.A2, self.B2))
+        obs_cost += np.sum(self.obs_cost_fun(check_points_WF[:, 0], check_points_WF[:, 1], self.XC3, self.YC3, self.A3, self.B3))
 
         # Term pushing the agent to stay in the neighborhood of target
         peak_rew = math.log(math.exp(self.alpha2*-(math.sqrt((x_ee-self.TARGET_STATE[0])**2 + 0.1) - math.sqrt(0.1) - 0.1 + math.sqrt((y_ee-self.TARGET_STATE[1])**2 + 0.1) - math.sqrt(0.1) - 0.1 )) + 1)/self.alpha2
@@ -622,7 +645,7 @@ class CarPark(Car):
         partial_reward = np.array([self.reward(w, s) for w, s in zip(weights, state)])
 
         # Redefine action-related cost in tensorflow version
-        u_cost = tf.reduce_sum(action**2+ 1e2*(tf.exp(-self.conf.w_b*(action-self.conf.u_min)) + tf.exp(-self.conf.w_b*(self.conf.u_max-action))),axis=1) 
+        u_cost = tf.reduce_sum((action**2 + self.conf.w_b*(action/self.conf.u_max)**10),axis=1) 
     
         r = self.scale*(- weights[:,6]*u_cost) + tf.convert_to_tensor(partial_reward, dtype=tf.float32)
 
@@ -704,7 +727,7 @@ class Manipulator(Env):
         partial_reward = np.array([self.reward(w, s) for w, s in zip(weights, state)])
 
         # Redefine action-related cost in tensorflow version
-        u_cost = tf.reduce_sum(action**2+ 1e2*(tf.exp(-self.conf.w_b*(action-self.conf.u_min)) + tf.exp(-self.conf.w_b*(self.conf.u_max-action))),axis=1) 
+        u_cost = tf.reduce_sum((action**2 + self.conf.w_b*(action/self.conf.u_max)**10),axis=1) 
     
         r = self.scale*(- weights[:,6]*u_cost) + tf.convert_to_tensor(partial_reward, dtype=tf.float32)
 
@@ -786,10 +809,8 @@ class UR5(Env):
         partial_reward = np.array([self.reward(w, s) for w, s in zip(weights, state)])
 
         # Redefine action-related cost in tensorflow version
-        u_cost = tf.reduce_sum(action**2,axis=1)
+        u_cost = tf.reduce_sum((action**2 + self.conf.w_b*(action/self.conf.u_max)**10),axis=1) 
     
         r = self.scale*(- weights[:,6]*u_cost) + tf.convert_to_tensor(partial_reward, dtype=tf.float32)
 
         return tf.reshape(r, [r.shape[0], 1])
-
-#u_cost = tf.reduce_sum(action**2,axis=1)

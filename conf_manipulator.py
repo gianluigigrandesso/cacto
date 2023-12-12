@@ -16,7 +16,7 @@ NSTEPS = 100                                                                    
 CRITIC_LEARNING_RATE = 5e-4                                                                                # Learning rate for the critic network
 ACTOR_LEARNING_RATE = 1e-3                                                                                 # Learning rate for the policy network
 REPLAY_SIZE = 2**16                                                                                        # Size of the replay buffer
-BATCH_SIZE = 128                                                                                           # Size of the mini-batch 
+BATCH_SIZE = 64                                                                                           # Size of the mini-batch 
 
 # Set _steps_TD_N ONLY if MC not used
 MC = 0                                                                                                     # Flag to use MC or TD(n)
@@ -72,8 +72,6 @@ values_schedule_LR_A = [ACTOR_LEARNING_RATE,
                         ACTOR_LEARNING_RATE/16]  
 
 NORMALIZE_INPUTS = 1                                                                                        # Flag to normalize inputs (state)
-
-remap_angle = 0
 
 kreg_l1_A = 1e-2                                                                                            # Weight of L1 regularization in actor's network - kernel
 kreg_l2_A = 1e-2                                                                                            # Weight of L2 regularization in actor's network - kernel
@@ -215,7 +213,7 @@ tau_lower_bound = -200                                                          
 tau_upper_bound = 200                                                                                       # Action upper bound
 u_min = tau_lower_bound*np.ones(nb_action)                                                                  # Action lower bound vector
 u_max = tau_upper_bound*np.ones(nb_action)                                                                  # Action upper bound vector
-w_b = 1
+w_b = 1/w_u
 
 
 

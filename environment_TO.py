@@ -73,15 +73,17 @@ class SingleIntegrator_CAMS:
 
         self.cost = casadi.Function('cost', [cx,cu], [self.cost_fun(cx,cu)])
 
-        #self.step = casadi.Function('step', [cx,cu], [self.step_fun(cx,cu)])
+    def get_end_effector_position_fun(self, cx):      
+        p_ee = casadi.SX(3,1)
+        p_ee[:2] = cx[:2]
+        p_ee[-1] = 0  
 
-    def get_end_effector_position_fun(self, cx):        
-        return casadi.vertcat(cx[0],cx[1],0)
+        return p_ee
     
     def bound_control_cost(self, action):
         u_cost = 0
         for i in range(self.conf.nb_action):
-            u_cost += action[i]*action[i] + 1e2*(np.exp(-self.conf.w_b*(action[i]-self.conf.u_min[i])) + np.exp(-self.conf.w_b*(self.conf.u_max[i]-action[i])))
+            u_cost += action[i]*action[i] + self.conf.w_b*(action[i]/self.conf.u_max[i])**10
 
         return u_cost
     
@@ -110,8 +112,9 @@ class SingleIntegrator_CAMS:
     
     def simulate_fun(self, x, u):
         ''' Integrate dynamics '''
-        x_next = casadi.vertcat(x[0] + self.conf.dt*u[0],
-                                x[1] + self.conf.dt*u[1])
+        x_next = casadi.SX(self.conf.nx,1)
+        x_next[0] = x[0] + self.conf.dt*u[0]
+        x_next[1] = x[1] + self.conf.dt*u[1]
         
         return x_next
     
@@ -195,12 +198,10 @@ class DoubleIntegrator_CAMS:
 
         self.cost = casadi.Function('cost', [cx,cu], [self.cost_fun(cx,cu)])
 
-        #self.step = casadi.Function('step', [cx,cu], [self.step_fun(cx,cu)])
-
     def bound_control_cost(self, action):
         u_cost = 0
         for i in range(self.conf.nb_action):
-            u_cost += action[i]*action[i] + 1e2*(np.exp(-self.conf.w_b*(action[i]-self.conf.u_min[i])) + np.exp(-self.conf.w_b*(self.conf.u_max[i]-action[i])))
+            u_cost += action[i]*action[i] + self.conf.w_b*(action[i]/self.conf.u_max[i])**10
 
         return u_cost
 
@@ -321,15 +322,17 @@ class Car_CAMS:
 
         self.cost = casadi.Function('cost', [cx,cu], [self.cost_fun(cx,cu)])
 
-        #self.step = casadi.Function('step', [cx,cu], [self.step_fun(cx,cu)])
-
     def get_end_effector_position_fun(self, cx):        
-        return casadi.vertcat(cx[0],cx[1],0)
+        p_ee = casadi.SX(3,1)
+        p_ee[:2] = cx[:2]
+        p_ee[-1] = 0  
+
+        return p_ee
     
     def bound_control_cost(self, action):
         u_cost = 0
         for i in range(self.conf.nb_action):
-            u_cost += action[i]*action[i] + 1e2*(np.exp(-self.conf.w_b*(action[i]-self.conf.u_min[i])) + np.exp(-self.conf.w_b*(self.conf.u_max[i]-action[i])))
+            u_cost += action[i]*action[i] + self.conf.w_b*(action[i]/self.conf.u_max[i])**10
 
         return u_cost
     
@@ -358,11 +361,12 @@ class Car_CAMS:
     
     def simulate_fun(self, x, u):
         ''' Integrate dynamics '''
-        x_next = casadi.vertcat(x[0] + self.conf.dt*x[3]*casadi.cos(x[2]) + self.conf.dt**2*x[4]*casadi.cos(x[2])/2,
-                                x[1] + self.conf.dt*x[3]*casadi.sin(x[2]) + self.conf.dt**2*x[4]*casadi.sin(x[2])/2,
-                                x[2] + self.conf.dt*u[0],
-                                x[3] + self.conf.dt*x[4],
-                                x[4] + self.conf.dt*u[1])
+        x_next = casadi.SX(self.conf.nx,1)
+        x_next[0] = x[0] + self.conf.dt*x[3]*casadi.cos(x[2]) + self.conf.dt**2*x[4]*casadi.cos(x[2])/2
+        x_next[1] = x[1] + self.conf.dt*x[3]*casadi.sin(x[2]) + self.conf.dt**2*x[4]*casadi.sin(x[2])/2
+        x_next[2] = x[2] + self.conf.dt*u[0]
+        x_next[3] = x[3] + self.conf.dt*x[4]
+        x_next[4] = x[4] + self.conf.dt*u[1]
         
         return x_next
     
@@ -443,12 +447,12 @@ class CarPark_CAMS:
 
         self.cost = casadi.Function('cost', [cx,cu], [self.cost_fun(cx,cu)])
 
-        #self.step = casadi.Function('step', [cx,cu], [self.step_fun(cx,cu)])
+    def get_end_effector_position_fun(self, cx):       
+        p_ee = casadi.SX(3,1) 
+        p_ee[:2] = cx[:2] + np.array([[np.cos(cx[2]), -np.sin(cx[2])], [np.sin(cx[2]), np.cos(cx[2])]]).dot(np.array([self.conf.L_delta/2,0]))
+        p_ee[-1] = 0  
 
-    def get_end_effector_position_fun(self, cx):        
-        p_ee_tmp = cx[:2] + np.array([[np.cos(cx[2]), -np.sin(cx[2])], [np.sin(cx[2]), np.cos(cx[2])]]).dot(np.array([self.conf.L_delta/2,0]))
-
-        return casadi.vertcat(p_ee_tmp[0],p_ee_tmp[1],0)
+        return p_ee
     
     def obs_cost_fun(self, x, y, x_clip, y_clip, Wx, Wy, fv=1, k=50):
         k = self.conf.k_db
@@ -459,10 +463,19 @@ class CarPark_CAMS:
     def bound_control_cost(self, action):
         u_cost = 0
         for i in range(self.conf.nb_action):
-            u_cost += action[i]*action[i] + 1e2*(np.exp(-self.conf.w_b*(action[i]-self.conf.u_min[i])) + np.exp(-self.conf.w_b*(self.conf.u_max[i]-action[i])))
+            u_cost += action[i]*action[i] + self.conf.w_b*(action[i]/self.conf.u_max[i])**10
 
         return u_cost
     
+    def rotation_matrix(self, angle):
+        ''' Compute the 2x2 rotation matrix for a given angle '''
+        cos_theta = casadi.cos(angle)
+        sin_theta = casadi.sin(angle)
+
+        rotation_mat = casadi.vertcat(casadi.horzcat(cos_theta, -sin_theta),
+                                   casadi.horzcat(sin_theta, cos_theta))
+        return rotation_mat
+
     def cost_fun(self, x, u):
         ''' Compute cost '''
         p_ee_tmp = self.p_ee(x)
@@ -471,12 +484,11 @@ class CarPark_CAMS:
 
         ### Penalties representing the obstacle ###
         obs_cost = 0
-        for i in range(len(self.conf.check_points_BF)):
-            check_points_WF_i = np.array([[np.cos(theta_ee), -np.sin(theta_ee)], [np.sin(theta_ee), np.cos(theta_ee)]]).dot(self.conf.check_points_BF[i,:]) + p_ee
-            obs_cost += self.obs_cost_fun(check_points_WF_i[0],check_points_WF_i[1],self.XC1,self.YC1,self.A1,self.B1)
-            obs_cost += self.obs_cost_fun(check_points_WF_i[0],check_points_WF_i[1],self.XC2,self.YC2,self.A2,self.B2)
-            obs_cost += self.obs_cost_fun(check_points_WF_i[0],check_points_WF_i[1],self.XC3,self.YC3,self.A3,self.B3)
-            
+        check_points_WF = casadi.mtimes(self.rotation_matrix(theta_ee), self.conf.check_points_BF.T).T + casadi.repmat(p_ee.T, self.conf.check_points_BF.shape[0], 1)
+        obs_cost += casadi.sum1(self.obs_cost_fun(check_points_WF[:, 0], check_points_WF[:, 1], self.XC1, self.YC1, self.A1, self.B1))
+        obs_cost += casadi.sum1(self.obs_cost_fun(check_points_WF[:, 0], check_points_WF[:, 1], self.XC2, self.YC2, self.A2, self.B2))
+        obs_cost += casadi.sum1(self.obs_cost_fun(check_points_WF[:, 0], check_points_WF[:, 1], self.XC3, self.YC3, self.A3, self.B3))
+             
         ### Control effort term ###
         u_cost = self.bound_control_cost(u)
 
@@ -492,11 +504,14 @@ class CarPark_CAMS:
     
     def simulate_fun(self, x, u):
         ''' Integrate dynamics '''
-        x_next = casadi.vertcat(x[0] + self.conf.dt*x[3]*casadi.cos(x[2]),
-                                x[1] + self.conf.dt*x[3]*casadi.sin(x[2]),
-                                x[2] + self.conf.dt*x[3]*casadi.tan(x[4])/self.conf.L_delta,
-                                x[3] + self.conf.dt*u[0],
-                                x[4] + self.conf.dt*u[1]/self.conf.tau_delta)
+        x_next = casadi.SX(self.conf.nx,1)
+        x_next[0] = x[0] + self.conf.dt*x[3]*casadi.cos(x[2])
+        x_next[1] = x[1] + self.conf.dt*x[3]*casadi.sin(x[2])
+        x_next[2] = x[2] + self.conf.dt*x[3]*casadi.tan(x[4])/self.conf.L_delta
+        x_next[3] = x[3] + self.conf.dt*u[0]
+        x_next[4] = x[4] + self.conf.dt*u[1]/self.conf.tau_delta
+        
+        return x_next
         
         return x_next
     
@@ -580,12 +595,10 @@ class Manipulator_CAMS:
 
         self.cost = casadi.Function('cost', [cx,cu], [self.cost_fun(cx,cu)])
 
-        #self.step = casadi.Function('step', [cx,cu], [self.step_fun(cx,cu)])
-
     def bound_control_cost(self, action):
         u_cost = 0
         for i in range(self.conf.nb_action):
-            u_cost += action[i]*action[i] + 1e2*(np.exp(-self.conf.w_b*(action[i]-self.conf.u_min[i])) + np.exp(-self.conf.w_b*(self.conf.u_max[i]-action[i])))
+            u_cost += action[i]*action[i] + self.conf.w_b*(action[i]/self.conf.u_max[i])**10
 
         return u_cost
     
@@ -715,8 +728,6 @@ class UR5_CAMS:
 
         self.cost = casadi.Function('cost', [cx,cu], [self.cost_fun(cx,cu)])
 
-        #self.step = casadi.Function('step', [cx,cu], [self.step_fun(cx,cu)])
-
     def cost_fun(self, x, u):
         ''' Compute cost '''
         p_ee = self.p_ee(x)
@@ -729,7 +740,7 @@ class UR5_CAMS:
         ### Control effort term ###
         u_cost = 0
         for i in range(self.nu):
-            u_cost += u[i]**2
+            u_cost += u[i]**2 + self.conf.w_b*(u[i]/self.conf.u_max[i])**10
 
         ### Distence to target term (log valley centered at target) ###
         peak_rew = np.log(np.exp(self.conf.alpha2*-(np.sqrt((p_ee[0]-self.conf.TARGET_STATE[0])**2 +0.1) - np.sqrt(0.1) - 0.1 + np.sqrt((p_ee[1]-self.conf.TARGET_STATE[1])**2 +0.1) - np.sqrt(0.1) - 0.1 + np.sqrt((p_ee[2]-self.conf.TARGET_STATE[2])**2 +0.1) - np.sqrt(0.1) - 0.1)) + 1)/self.conf.alpha2

@@ -50,14 +50,7 @@ class NN:
     
     def create_actor(self):
         ''' Create actor NN '''
-        if (self.conf.system_id == 'car' or self.conf.system_id == 'car_park') and self.conf.remap_angle:
-            nb_state_input = self.conf.nb_state+1
-        elif self.conf.system_id == 'manipulator' and self.conf.remap_angle:
-            nb_state_input = self.conf.nb_state+3
-        else:
-            nb_state_input = self.conf.nb_state
-
-        inputs = layers.Input(shape=(nb_state_input,))
+        inputs = layers.Input(shape=(self.conf.nb_state,))
         
         lay1 = layers.Dense(self.conf.NH1,kernel_regularizer=regularizers.l1_l2(self.conf.kreg_l1_A,self.conf.kreg_l2_A),bias_regularizer=regularizers.l1_l2(self.conf.breg_l1_A,self.conf.breg_l2_A))(inputs)                                        
         leakyrelu1 = layers.LeakyReLU()(lay1)
@@ -71,14 +64,7 @@ class NN:
 
     def create_critic_elu(self): 
         ''' Create critic NN - elu'''
-        if (self.conf.system_id == 'car' or self.conf.system_id == 'car_park') and self.conf.remap_angle:
-            nb_state_input = self.conf.nb_state+1
-        elif self.conf.system_id == 'manipulator' and self.conf.remap_angle:
-            nb_state_input = self.conf.nb_state+3
-        else:
-            nb_state_input = self.conf.nb_state
-
-        state_input = layers.Input(shape=(nb_state_input,))
+        state_input = layers.Input(shape=(self.conf.nb_state,))
 
         state_out1 = layers.Dense(16, activation='elu')(state_input) 
         state_out2 = layers.Dense(32, activation='elu')(state_out1) 
@@ -93,14 +79,7 @@ class NN:
     
     def create_critic_sine_elu(self): 
         ''' Create critic NN - elu'''
-        if (self.conf.system_id == 'car' or self.conf.system_id == 'car_park') and self.conf.remap_angle:
-            nb_state_input = self.conf.nb_state+1
-        elif self.conf.system_id == 'manipulator' and self.conf.remap_angle:
-            nb_state_input = self.conf.nb_state+3
-        else:
-            nb_state_input = self.conf.nb_state
-
-        state_input = layers.Input(shape=(nb_state_input,))
+        state_input = layers.Input(shape=(self.conf.nb_state,))
 
         state_out1 = SinusodialRepresentationDense(64, activation='sine')(state_input) 
         state_out2 = layers.Dense(64, activation='elu')(state_out1) 
@@ -115,14 +94,7 @@ class NN:
     
     def create_critic_sine(self): 
         ''' Create critic NN - elu'''
-        if (self.conf.system_id == 'car' or self.conf.system_id == 'car_park') and self.conf.remap_angle:
-            nb_state_input = self.conf.nb_state+1
-        elif self.conf.system_id == 'manipulator' and self.conf.remap_angle:
-            nb_state_input = self.conf.nb_state+3
-        else:
-            nb_state_input = self.conf.nb_state
-
-        state_input = layers.Input(shape=(nb_state_input,))
+        state_input = layers.Input(shape=(self.conf.nb_state,))
         
         state_out1 = SinusodialRepresentationDense(64, activation='sine')(state_input) 
         state_out2 = SinusodialRepresentationDense(64, activation='sine')(state_out1) 
@@ -163,11 +135,6 @@ class NN:
         if self.conf.NORMALIZE_INPUTS:
             input = normalize_tensor(input, self.conf.state_norm_arr)
 
-        if (self.conf.system_id == 'car' or self.conf.system_id == 'car_park') and self.conf.remap_angle:
-            input = tf.stack([input[:,0],input[:,1],tf.cos(input[:,2]),tf.sin(input[:,2]),input[:,3],input[:,4],input[:,5]], axis=1)
-        elif self.conf.system_id == 'manipulator' and self.conf.remap_angle:
-            input = tf.stack([tf.cos(input[:,0]),tf.sin(input[:,0]),tf.cos(input[:,1]),tf.sin(input[:,1]),tf.cos(input[:,2]),tf.sin(input[:,2]),input[:,3],input[:,4],input[:,5],input[:,6]], axis=1)
-        
         return NN(input, training=True)
     
     def custom_logarithm(self,input):

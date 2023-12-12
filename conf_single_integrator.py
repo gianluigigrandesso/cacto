@@ -8,7 +8,7 @@ NUPDATES = 100000                                                               
 UPDATE_LOOPS = np.arange(1000, 25000, 3000)                                                                 # Number of updates of both critic and actor performed every EP_UPDATE episodes                                                                                
 NEPISODES = int(EP_UPDATE*len(UPDATE_LOOPS))                                                                # Max training episodes
 NLOOPS = len(UPDATE_LOOPS)                                                                                  # Number of algorithm loops
-NSTEPS = 200                                                                                                # Max episode length
+NSTEPS = 100                                                                                                # Max episode length
 CRITIC_LEARNING_RATE = 5e-4                                                                                 # Learning rate for the critic network
 ACTOR_LEARNING_RATE = 1e-3                                                                                  # Learning rate for the policy network
 REPLAY_SIZE = 2**16                                                                                         # Size of the replay buffer
@@ -39,7 +39,7 @@ else:
 
 
 ### NNs parameters
-critic_type = 'elu'                                                                                        # Activation function - critic (either relu, elu, sine, sine-elu)
+critic_type = 'sine'                                                                                        # Activation function - critic (either relu, elu, sine, sine-elu)
 
 NH1 = 256                                                                                                   # 1st hidden layer size - actor
 NH2 = 256                                                                                                   # 2nd hidden layer size - actor
@@ -68,8 +68,6 @@ values_schedule_LR_A = [ACTOR_LEARNING_RATE,
                         ACTOR_LEARNING_RATE/16]  
 
 NORMALIZE_INPUTS = 1                                                                                        # Flag to normalize inputs (state)
-
-remap_angle = 0                                                                                             # Flag to remap angles in the state vector (theta -> cos(theta), sin(theta))
 
 kreg_l1_A = 1e-2                                                                                            # Weight of L1 regularization in actor's network - kernel
 kreg_l2_A = 1e-2                                                                                            # Weight of L2 regularization in actor's network - kernel
@@ -190,7 +188,7 @@ tau_lower_bound = -6                                                            
 tau_upper_bound = 6                                                                                         # Action upper bound
 u_min = tau_lower_bound*np.ones(nb_action)                                                                  # Action lower bound vector
 u_max = tau_upper_bound*np.ones(nb_action)                                                                  # Action upper bound vector
-w_b = 10
+w_b = 1/w_u
 
 
 

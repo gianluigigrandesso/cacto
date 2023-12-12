@@ -37,7 +37,7 @@ def parse_args():
     #                    choices=["True", "False"],
     #                    help="Flag to use GPU")
     
-    parser.add_argument('--nb-cpus',                        type=int,   default=2,
+    parser.add_argument('--nb-cpus',                        type=int,   default=10,
                         help="Number of TO problems solved in parallel")
     
     parser.add_argument('--w-S',                            type=float, default=0,
@@ -151,7 +151,7 @@ if __name__ == '__main__':
     RLAC.RL_save_weights(update_step_counter)
 
     # Plot initial rollouts
-    _ = plot_fun.rollout(update_step_counter, RLAC.actor_model, conf.init_states_sim, diff_loc=1)
+    plot_fun.plot_traj_from_ICS(np.array(conf.init_states_sim), TrOp, RLAC, update_step_counter=update_step_counter,steps=conf.NSTEPS, init=0)
 
     # Initialize arrays to store the reward history of each episode and the average reward history of last 100 episodes
     ep_arr_idx = 0
@@ -222,7 +222,9 @@ if __name__ == '__main__':
 
         # Plot rollouts and state and control trajectories
         if update_step_counter%conf.plot_rollout_interval_diff_loc == 0 or system_id == 'single_integrator' or system_id == 'double_integrator' or system_id == 'car_park' or system_id == 'car' or system_id == 'manipulator':
-            _ = plot_fun.rollout(update_step_counter, RLAC.actor_model, conf.init_states_sim, diff_loc=1)
+            print("System: {} - N_try = {}".format(conf.system_id, N_try))
+            plot_fun.plot_Critic_Value_function(RLAC.critic_model, update_step_counter, system_id)
+            plot_fun.plot_traj_from_ICS(np.array(conf.init_states_sim), TrOp, RLAC, update_step_counter=update_step_counter, ep=ep,steps=conf.NSTEPS, init=1)
 
         # Update arrays to store the reward history and its average
         ep_reward_arr[ep_arr_idx:ep_arr_idx+len(tmp)] = ep_return
